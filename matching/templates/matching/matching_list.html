@@ -1,0 +1,34 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}매칭{% endblock %}
+{% block header_right %}
+    <a href="{% url 'profile_setup' %}" style="color:var(--brand-pink); font-size:12px; text-decoration:none; margin-right:10px;">프로필 수정</a>
+    <a href="{% url 'matching_preferences' %}" style="color:var(--brand-pink); font-size:12px; text-decoration:none;">조건 설정</a>
+{% endblock %}
+
+{% block content %}
+{% if candidates %}
+    <div style="display:flex; flex-direction:column; gap:8px;">
+    {% for c in candidates %}
+        <a href="{% url 'matching_profile' c.id %}" style="text-decoration:none;">
+            <div class="card list-item">
+                {% if c.profile_image_url %}
+                    <img src="{{ c.profile_image_url }}" class="avatar" alt="">
+                {% else %}
+                    <div class="avatar"></div>
+                {% endif %}
+                <div style="flex:1;">
+                    <div style="font-size:13px; font-weight:500; color:var(--text-primary);">{{ c.birth_year }}년생 · {{ c.nickname }}</div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">{{ c.height_cm }}cm · {{ c.weight_kg }}kg · {{ c.get_hobby_first_display }}</div>
+                </div>
+                <i class="ti ti-chevron-right" style="color:var(--text-muted); font-size:16px;" aria-hidden="true"></i>
+            </div>
+        </a>
+    {% endfor %}
+    </div>
+{% else %}
+    <div class="card" style="text-align:center; padding:40px 16px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin:0;">조건에 맞는 상대가 아직 없어.<br>조건 설정을 조금 넓혀볼래?</p>
+    </div>
+{% endif %}
+{% endblock %}

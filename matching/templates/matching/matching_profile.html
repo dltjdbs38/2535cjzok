@@ -1,0 +1,56 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}프로필{% endblock %}
+{% block header_right %}
+    <a href="{% url 'matching_list' %}" style="color:var(--brand-pink); font-size:18px; text-decoration:none;"><i class="ti ti-x" aria-hidden="true"></i></a>
+{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center; padding:20px 16px; margin-bottom:12px;">
+    {% if profile.profile_image_url %}
+        <img src="{{ profile.profile_image_url }}" style="width:96px; height:96px; border-radius:50%; object-fit:cover;" alt="">
+    {% else %}
+        <div class="avatar round" style="width:96px; height:96px; margin:0 auto;"></div>
+    {% endif %}
+    <h3 style="font-size:17px; margin:10px 0 2px;">{{ profile.nickname }}</h3>
+    <p style="font-size:12px; color:var(--text-secondary); margin:0;">{{ profile.intro }}</p>
+</div>
+
+<div class="card" style="display:flex; flex-direction:column; gap:10px;">
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">나이</span><span>{{ profile.birth_year }}년생</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">키/몸무게</span><span>{{ profile.height_cm }}cm / {{ profile.weight_kg }}kg</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">취미 1순위</span><span>{{ profile.get_hobby_first_display }}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">취미 2순위</span><span>{{ profile.get_hobby_second_display }}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">관심없는 것</span><span>{{ profile.get_hobby_dislike_display }}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">거주 지역</span><span>{{ profile.get_region_display }}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">종교</span><span>{{ profile.get_religion_display }}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:13px;">
+        <span style="color:var(--text-secondary);">흡연</span><span>{% if profile.is_smoker %}흡연{% else %}비흡연{% endif %}</span>
+    </div>
+</div>
+
+<div style="display:flex; gap:8px; margin-top:14px;">
+    <button type="button" class="btn-primary" style="background:#fff; color:var(--text-muted); border:0.5px solid var(--border);" disabled>대화하기 (준비중)</button>
+    <form method="post" action="{% url 'matching_like' profile.id %}" style="flex:1;">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary" style="{% if liked %}background:var(--brand-pink); color:var(--brand-blue);{% endif %}">
+            {% if liked %}좋아요 취소{% else %}좋아요{% endif %}
+        </button>
+    </form>
+</div>
+{% endblock %}

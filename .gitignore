@@ -1,0 +1,19 @@
+venv/
+__pycache__/
+*.pyc
+*.sqlite3
+.env
+staticfiles/
+media/
+
+# 에디터/IDE 설정 (VSCode, PyCharm/IntelliJ 등 - 사람마다 다른 로컬 설정이라 공유하면 안 됨)
+.vscode/
+.idea/
+
+# OS가 폴더 열 때마다 자동으로 만드는 파일
+.DS_Store
+Thumbs.db
+
+# 테스트/커버리지 산출물 (지금은 안 쓰지만 나중에 테스트 도입하면 필요)
+.coverage
+htmlcov/

@@ -1,0 +1,13 @@
+{% extends "accounts/base.html" %}
+{% load socialaccount %}
+
+{% block header_title %}2535 취종지외카{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center; padding:40px 16px;">
+    <p style="font-size:14px; color:var(--text-secondary); margin:0 0 16px;">취미·종교·지역·외모·카카오톡 기반<br>25~35세 소개팅</p>
+    <a href="{% provider_login_url 'kakao' %}">
+        <button type="button" class="btn-primary">카카오로 로그인</button>
+    </a>
+</div>
+{% endblock %}

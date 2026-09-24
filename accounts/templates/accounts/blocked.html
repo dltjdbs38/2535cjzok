@@ -1,0 +1,16 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}가입 불가{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center; padding:32px 16px;">
+    <i class="ti ti-ban" style="font-size:26px; color:#A32D2D;" aria-hidden="true"></i>
+    <h3 style="font-size:16px; margin:12px 0 6px;">가입이 영구적으로 제한됐어</h3>
+    <p style="font-size:13px; color:var(--text-secondary); margin:0;">이용 정책 위반 또는 반복된 심사 거부로 영구퇴출 처리되어,<br>동일 계정으로는 다시 가입하거나 심사를 받을 수 없어.</p>
+</div>
+
+<form method="post" action="{% url 'account_logout' %}" style="margin-top:12px;">
+    {% csrf_token %}
+    <button type="submit" class="btn-primary" style="background:#fff; color:var(--text-secondary); border:0.5px solid var(--border);">로그아웃</button>
+</form>
+{% endblock %}
