@@ -23,6 +23,7 @@ class User(AbstractUser):
         SOCCER = "SOCCER", "축구보기"
         WEBTOON = "WEBTOON", "만화보기"
         READING = "READING", "책읽기"
+        COOKING = "COOKING", "요리하기"
 
     class Religion(models.TextChoices):
         NONE = "NONE", "무교"
@@ -60,7 +61,9 @@ class User(AbstractUser):
     # 카카오 회원번호(고유 id). 카카오 쪽 값이므로 문자열로 저장하고 유니크 제약을 건다.
     kakao_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
     nickname = models.CharField(max_length=50, blank=True)  # 카카오톡 닉네임
-    profile_image_url = models.URLField(blank=True)  # 카카오톡 프로필사진 URL
+    profile_image_url = models.URLField(blank=True)  # 카카오가 준 원본 URL (참고 기록용, 화면 표시엔 안 씀)
+    # 위 URL은 카톡 프사가 바뀌면 깨질 수 있어서, 실제 화면에 보여줄 땐 이 필드(우리 서버에 저장한 사본)를 쓴다.
+    profile_photo = models.ImageField(upload_to="kakao_profile/", blank=True)
     # 카카오에서 출생연도(birthyear)를 못 받아오면 None으로 두고,
     # 회원가입 화면에서 직접 입력받아 채운다. (지난 대화에서 정한 폴백 플랜)
     birth_year = models.PositiveSmallIntegerField(null=True, blank=True)

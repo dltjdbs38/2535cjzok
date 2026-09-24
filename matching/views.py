@@ -23,9 +23,9 @@ def _require_approved(view_func):
 
 def _candidates_for(viewer, preference):
     """
-    txt 6번 매칭 규칙을 그대로 구현:
-    - 거주지역/키/종교/흡연: 내가 설정한 조건에 맞는 사람만
-    - 취미: 관심없는 것 1순위가 서로 같아야 하고, 좋아하는 것 1/2순위는 하나라도 겹쳐야 함
+    txt 6번 매칭 규칙을 그대로 구현하되, 취미는 "내 취미와 겹치는지"가 아니라
+    "내가 원하는 상대방 취미 조건에 맞는지"로 변경했다 (다른 조건들과 같은 패턴).
+    - 거주지역/키/종교/흡연/취미: 내가 설정한 조건에 맞는 사람만
     - 음악 취향(유사도 매칭)은 프로토타입 범위에서 제외 - 지금은 정보 표시만 하고 필터링엔 안 씀
     """
     opposite_gender = User.Gender.FEMALE if viewer.gender == User.Gender.MALE else User.Gender.MALE
@@ -54,17 +54,24 @@ def _candidates_for(viewer, preference):
             qs = qs.filter(is_smoker__in=smoker_bools)
 
     qs = qs.filter(height_cm__isnull=False)
-    height_min, height_max = preference.height_range_cm()
-    if height_min is not None:
-        qs = qs.filter(height_cm__gte=height_min)
-    if height_max is not None:
-        qs = qs.filter(height_cm__lt=height_max)
+    height_ranges = preference.height_ranges_cm()
+    if height_ranges:
+        # 여러 키 구간 중 "하나라도" 맞으면 통과해야 하므로 OR로 묶는다.
+        height_q = Q()
+        for height_min, height_max in height_ranges:
+            condition = Q()
+            if height_min is not None:
+                condition &= Q(height_cm__gte=height_min)
+            if height_max is not None:
+                condition &= Q(height_cm__lt=height_max)
+            height_q |= condition
+        qs = qs.filter(height_q)
 
-    if viewer.hobby_dislike:
-        qs = qs.filter(hobby_dislike=viewer.hobby_dislike)
-    my_hobbies = [h for h in (viewer.hobby_first, viewer.hobby_second) if h]
-    if my_hobbies:
-        qs = qs.filter(Q(hobby_first__in=my_hobbies) | Q(hobby_second__in=my_hobbies))
+    if preference.preferred_hobby_dislike:
+        qs = qs.filter(hobby_dislike=preference.preferred_hobby_dislike)
+    wanted_hobbies = [h for h in (preference.preferred_hobby_first, preference.preferred_hobby_second) if h]
+    if wanted_hobbies:
+        qs = qs.filter(Q(hobby_first__in=wanted_hobbies) | Q(hobby_second__in=wanted_hobbies))
 
     return qs.order_by("-id")
 

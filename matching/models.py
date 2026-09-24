@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from accounts.models import User
+
 
 class SmokingPreference(models.TextChoices):
     NON_SMOKER = "NON_SMOKER", "비흡연"
@@ -48,9 +50,18 @@ class MatchingPreference(models.Model):
     preferred_regions = models.CharField(max_length=300, blank=True)
     preferred_religions = models.CharField(max_length=200, blank=True)
     preferred_smoking = models.CharField(max_length=100, blank=True)
-    preferred_height_code = models.CharField(max_length=20, choices=HEIGHT_CHOICES, blank=True)
+    preferred_height_codes = models.CharField(max_length=100, blank=True)  # 복수선택, 콤마구분
 
-    favorite_artists = models.CharField(max_length=200, blank=True)  # 선택 항목, 최대 3명 텍스트로 저장
+    # 상대방에게 원하는 취미. (참고: 회원 본인의 취미는 accounts.User.hobby_first 등에 따로 저장돼 있음 -
+    # 그건 "내 취미가 뭔지"고, 이건 "상대 취미가 뭐였으면 좋겠는지"라 서로 다른 정보임)
+    preferred_hobby_first = models.CharField(max_length=20, choices=User.Hobby.choices, blank=True)
+    preferred_hobby_second = models.CharField(max_length=20, choices=User.Hobby.choices, blank=True)
+    preferred_hobby_dislike = models.CharField(max_length=20, choices=User.Hobby.choices, blank=True)
+
+    # 음악 취향(선택) - 최근 자주 듣거나 좋아하는 가수 최대 3명, 항목별로 따로 저장.
+    favorite_artist_1 = models.CharField(max_length=50, blank=True)
+    favorite_artist_2 = models.CharField(max_length=50, blank=True)
+    favorite_artist_3 = models.CharField(max_length=50, blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -66,8 +77,14 @@ class MatchingPreference(models.Model):
     def preferred_smoking_list(self):
         return [v for v in self.preferred_smoking.split(",") if v]
 
-    def height_range_cm(self):
-        return HEIGHT_RANGE_CM.get(self.preferred_height_code, (None, None))
+    @property
+    def preferred_height_codes_list(self):
+        return [v for v in self.preferred_height_codes.split(",") if v]
+
+    def height_ranges_cm(self):
+        # 선택된 키 코드 각각의 (최소, 최대미만) 범위를 리스트로 돌려준다.
+        # 매칭할 때는 이 여러 범위 중 "하나라도" 맞으면 통과(OR)시키면 된다.
+        return [HEIGHT_RANGE_CM[code] for code in self.preferred_height_codes_list if code in HEIGHT_RANGE_CM]
 
     def __str__(self):
         return f"{self.user}의 매칭 조건"

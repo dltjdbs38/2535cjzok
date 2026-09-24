@@ -5,7 +5,7 @@ from .models import Like, MatchingPreference
 
 @admin.register(MatchingPreference)
 class MatchingPreferenceAdmin(admin.ModelAdmin):
-    list_display = ("user", "preferred_regions", "preferred_height_code", "preferred_religions", "preferred_smoking")
+    list_display = ("user", "preferred_regions", "preferred_height_codes", "preferred_religions", "preferred_smoking")
 
 
 @admin.register(Like)

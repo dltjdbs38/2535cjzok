@@ -81,6 +81,8 @@ AUTHENTICATION_BACKENDS = [
 
 # 카카오 로그인 성공 시 우리 User 모델 필드를 자동으로 채워주는 어댑터.
 SOCIALACCOUNT_ADAPTER = 'accounts.adapters.KakaoSocialAccountAdapter'
+# 일반(이메일/비밀번호) 회원가입을 막는 어댑터 - "카카오로만 로그인 가능" 원칙을 실제로 강제한다.
+ACCOUNT_ADAPTER = 'accounts.adapters.AccountAdapter'
 
 # 로그인/회원가입에 이메일·아이디·비밀번호를 따로 요구하지 않는다.
 # (카카오 로그인만 지원하는 서비스이므로 자체 회원가입 폼 자체가 없음)

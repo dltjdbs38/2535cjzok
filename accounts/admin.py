@@ -31,7 +31,7 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         (
             "카카오 프로필",
-            {"fields": ("kakao_id", "nickname", "profile_image_url", "birth_year", "gender")},
+            {"fields": ("kakao_id", "nickname", "profile_image_url", "profile_photo", "birth_year", "gender")},
         ),
         (
             "심사용 업로드 사진",
@@ -76,7 +76,7 @@ class CustomUserAdmin(UserAdmin):
         items = [
             (url, label)
             for url, label in [
-                (obj.profile_image_url, "카톡"),
+                (obj.profile_photo.url if obj.profile_photo else "", "카톡(우리서버 사본)"),
                 (obj.face_photo.url if obj.face_photo else "", "얼굴"),
                 (obj.body_photo.url if obj.body_photo else "", "전신"),
             ]

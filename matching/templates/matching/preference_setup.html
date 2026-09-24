@@ -2,7 +2,7 @@
 
 {% block header_title %}매칭 조건 설정{% endblock %}
 {% block header_right %}
-    <a href="{% url 'matching_list' %}" style="color:var(--brand-pink); font-size:18px; text-decoration:none;"><i class="ti ti-chevron-left" aria-hidden="true"></i></a>
+    <a href="#" data-fallback-url="{% url 'matching_list' %}" onclick="if (window.history.length > 1) { history.back(); } else { window.location.href = this.dataset.fallbackUrl; } return false;" style="color:var(--brand-pink); font-size:18px; text-decoration:none;"><i class="ti ti-chevron-left" aria-hidden="true"></i></a>
 {% endblock %}
 {% block bottom_nav %}{% endblock %}
 
@@ -12,12 +12,16 @@
        label을 클릭 가능한 칩으로 스타일링한 뒤 :has()로 체크 여부에 따라 색을 바꾼다. */
     .chip-choices ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
     .chip-choices li { margin: 0; }
+    /* Django 6.x의 CheckboxSelectMultiple/RadioSelect는 <li>가 아니라 <div> 중첩으로 렌더링된다.
+       바깥 id=... 래퍼 div 한 겹, 그 안에 옵션마다 div 한 겹씩 - 그래서 2단계 자식 선택자를 쓴다. */
+    .chip-choices > div { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip-choices > div > div { margin: 0; }
     .chip-choices input { position: absolute; opacity: 0; width: 0; height: 0; }
     .chip-choices label {
         display: inline-block; font-size: 12px; padding: 6px 12px; border-radius: 14px;
         background: #fff; border: 0.5px solid #d8d5cb; color: var(--text-secondary); cursor: pointer;
     }
-    .chip-choices li:has(input:checked) label {
+    .chip-choices > div > div:has(input:checked) label {
         background: var(--brand-blue); border-color: var(--brand-blue); color: var(--brand-pink);
     }
 </style>
@@ -28,31 +32,50 @@
     {% csrf_token %}
 
     <div class="card" style="margin-bottom:10px;">
-        <div class="section-title">{{ form.preferred_regions.label }} (필수) · 복수선택</div>
+        <div class="section-title">원하는 상대방의 {{ form.preferred_regions.label }} (필수) · 복수선택</div>
         <div class="chip-choices">{{ form.preferred_regions }}</div>
         {{ form.preferred_regions.errors }}
     </div>
 
     <div class="card" style="margin-bottom:10px;">
-        <div class="section-title">{{ form.preferred_height_code.label }} (필수)</div>
-        <div class="chip-choices">{{ form.preferred_height_code }}</div>
-        {{ form.preferred_height_code.errors }}
+        <div class="section-title">원하는 상대방의 {{ form.preferred_height_codes.label }} (필수) · 복수선택</div>
+        <div class="chip-choices">{{ form.preferred_height_codes }}</div>
+        {{ form.preferred_height_codes.errors }}
     </div>
 
     <div class="card" style="margin-bottom:10px;">
-        <div class="section-title">{{ form.preferred_religions.label }} (필수) · 복수선택</div>
+        <div class="section-title">원하는 상대방의 {{ form.preferred_religions.label }} (필수) · 복수선택</div>
         <div class="chip-choices">{{ form.preferred_religions }}</div>
         {{ form.preferred_religions.errors }}
     </div>
 
     <div class="card" style="margin-bottom:10px;">
-        <div class="section-title">{{ form.preferred_smoking.label }} (필수) · 복수선택</div>
+        <div class="section-title">원하는 상대방의 {{ form.preferred_smoking.label }} (필수) · 복수선택</div>
         <div class="chip-choices">{{ form.preferred_smoking }}</div>
         {{ form.preferred_smoking.errors }}
     </div>
 
     <div class="card" style="margin-bottom:10px;">
-        <div class="section-title">취미 (참고용 · 내 프로필 기준으로 자동 매칭돼)</div>
+        <div class="section-title">원하는 상대방의 취미 (필수)</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:4px;">{{ form.preferred_hobby_first.label }}</label>
+                {{ form.preferred_hobby_first }}
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:4px;">{{ form.preferred_hobby_second.label }}</label>
+                {{ form.preferred_hobby_second }}
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:4px;">{{ form.preferred_hobby_dislike.label }}</label>
+                {{ form.preferred_hobby_dislike }}
+            </div>
+        </div>
+        {{ form.preferred_hobby_first.errors }}{{ form.preferred_hobby_second.errors }}{{ form.preferred_hobby_dislike.errors }}
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+        <div class="section-title">나의 취미 (프로필 기반)</div>
         <div style="font-size:12px; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px;">
             <div>좋아하는 것 1순위 · {{ request.user.get_hobby_first_display|default:"-" }}</div>
             <div>좋아하는 것 2순위 · {{ request.user.get_hobby_second_display|default:"-" }}</div>
@@ -61,8 +84,12 @@
     </div>
 
     <div class="card" style="margin-bottom:14px;">
-        <div class="section-title">{{ form.favorite_artists.label }}</div>
-        {{ form.favorite_artists }}
+        <div class="section-title">음악(선택) · 최근 자주 듣는 노래 3가지 또는 좋아하는 가수 3가지</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            {{ form.favorite_artist_1 }}
+            {{ form.favorite_artist_2 }}
+            {{ form.favorite_artist_3 }}
+        </div>
     </div>
 
     <button type="submit" class="btn-primary">저장</button>

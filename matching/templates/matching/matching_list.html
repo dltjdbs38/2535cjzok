@@ -12,8 +12,8 @@
     {% for c in candidates %}
         <a href="{% url 'matching_profile' c.id %}" style="text-decoration:none;">
             <div class="card list-item">
-                {% if c.profile_image_url %}
-                    <img src="{{ c.profile_image_url }}" class="avatar" alt="">
+                {% if c.profile_photo %}
+                    <img src="{{ c.profile_photo.url }}" class="avatar" alt="">
                 {% else %}
                     <div class="avatar"></div>
                 {% endif %}

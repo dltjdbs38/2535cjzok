@@ -1,4 +1,20 @@
+import requests
+from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from django.core.files.base import ContentFile
+
+
+class AccountAdapter(DefaultAccountAdapter):
+    """
+    일반(이메일/아이디+비밀번호) 회원가입을 완전히 막는 어댑터.
+    django-allauth는 include('allauth.urls')만 붙이면 /accounts/signup/ 같은
+    카카오와 무관한 일반 가입 화면을 기본으로 열어주는데, 우리 서비스는
+    "카카오톡으로만 로그인 가능"이 원칙이라 이 경로 자체를 막아야 한다.
+    (카카오 로그인/가입은 SocialAccountAdapter가 따로 처리하므로 영향 없음)
+    """
+
+    def is_open_for_signup(self, request):
+        return False
 
 
 class KakaoSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -40,5 +56,24 @@ class KakaoSocialAccountAdapter(DefaultSocialAccountAdapter):
         # username은 필수 필드라 카카오 회원번호를 기반으로 채워준다 (화면에 노출되지 않음).
         if not user.username:
             user.username = f"kakao_{user.kakao_id}"
+
+        return user
+
+    def save_user(self, request, sociallogin, form=None):
+        # populate_user()는 아직 저장 전 단계라 여기서(실제로 저장되는 시점) 사진을 다운로드한다.
+        # 카카오 프사 URL은 사용자가 나중에 프사를 바꾸면 깨질 수 있어서,
+        # 우리 서버 스토리지에 실제 파일로 복사해두고 화면에는 그 사본을 쓴다.
+        user = super().save_user(request, sociallogin, form)
+
+        if user.profile_image_url and not user.profile_photo:
+            try:
+                response = requests.get(user.profile_image_url, timeout=5)
+                response.raise_for_status()
+                filename = f"kakao_{user.kakao_id}.jpg"
+                user.profile_photo.save(filename, ContentFile(response.content), save=True)
+            except Exception:
+                # 다운로드가 실패해도(네트워크 오류, 손상된 이미지 등) 회원가입 자체는 막지 않는다.
+                # 이 경우 profile_photo가 비어있는 채로 남고, 화면에선 기본 아바타로 대체된다.
+                pass
 
         return user

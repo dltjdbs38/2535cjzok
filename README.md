@@ -38,6 +38,10 @@ python manage.py createsuperuser
 
 # 6) 서버 실행
 python manage.py runserver
+
+# 7) 테스트 유저 만들기
+python manage.py create_test_users --count 3 --gender M 
+# 남성 3명이 랜덤한 키/몸무게/취미/지역/종교/흡연여부로 바로 승인(APPROVED) 상태로
 ```
 
 ## 2. 카카오 로그인 실제로 붙이기
