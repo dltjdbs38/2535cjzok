@@ -1,0 +1,397 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}대화{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:6px; margin:-14px -14px 12px; padding:10px 14px; border-bottom:0.5px solid var(--border);">
+    <a href="#" data-fallback-url="{% url 'chat_list' %}" onclick="if (window.history.length > 1) { history.back(); } else { window.location.href = this.dataset.fallbackUrl; } return false;" style="color:var(--text-primary); text-decoration:none; display:flex; align-items:center; gap:4px; font-size:13px; font-weight:500;">
+        <i class="ti ti-chevron-left" aria-hidden="true"></i>{{ other.nickname }}
+    </a>
+</div>
+<div id="message-list" data-room-id="{{ room.id }}" style="display:flex; flex-direction:column; gap:4px;"></div>
+{{ message_list|json_script:"initial-messages" }}
+{% endblock %}
+
+{% block bottom_nav %}
+<div id="reply-preview" style="display:none; align-items:center; gap:8px; background:#fff; border-top:0.5px solid var(--border); padding:8px 12px;">
+    <div style="flex:1; font-size:11px; color:var(--text-secondary); border-left:2px solid var(--brand-blue); padding-left:8px;">
+        <span id="reply-preview-name" style="font-weight:500;"></span>에게 답장<br>
+        <span id="reply-preview-snippet" style="color:var(--text-muted);"></span>
+    </div>
+    <button type="button" onclick="cancelReply()" style="background:none; border:none; color:var(--text-muted); font-size:16px;"><i class="ti ti-x" aria-hidden="true"></i></button>
+</div>
+<div id="photo-preview-strip" style="display:none; gap:6px; background:#fff; padding:10px 12px;"></div>
+<form method="post" id="send-form" enctype="multipart/form-data" style="display:flex; align-items:center; gap:8px; border-top:0.5px solid var(--border); background:#fff; padding:10px 12px;">
+    {% csrf_token %}
+    <input type="hidden" name="reply_to" id="reply-to-input" value="">
+    <div style="position:relative; flex-shrink:0;">
+        <button type="button" id="plus-btn" style="width:26px; height:26px; border-radius:50%; background:var(--brand-blue); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+            <i class="ti ti-plus" style="color:var(--brand-pink); font-size:16px;" aria-hidden="true"></i>
+        </button>
+        <div id="plus-menu" style="display:none; position:absolute; bottom:34px; left:0; background:#fff; border:0.5px solid var(--border); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.15); overflow:hidden; width:140px; z-index:20;">
+            <label for="camera-input" style="display:flex; align-items:center; gap:8px; padding:10px 12px; font-size:12px; cursor:pointer; color:var(--text-primary);">
+                <i class="ti ti-camera" style="color:var(--brand-blue); font-size:16px;" aria-hidden="true"></i>카메라로 촬영
+            </label>
+            <label for="gallery-input" style="display:flex; align-items:center; gap:8px; padding:10px 12px; font-size:12px; cursor:pointer; color:var(--text-primary); border-top:0.5px solid var(--border);">
+                <i class="ti ti-photo" style="color:var(--brand-blue); font-size:16px;" aria-hidden="true"></i>앨범에서 선택
+            </label>
+        </div>
+    </div>
+    <input type="file" name="image" id="camera-input" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" name="image" id="gallery-input" accept="image/*" multiple style="display:none;">
+    <input type="text" name="content" id="content-input" maxlength="1000" placeholder="메시지 보내기 (메시지 우클릭/왼쪽 스와이프로 답장)" autocomplete="off"
+           style="flex:1; border-radius:20px; border:0.5px solid var(--border); padding:9px 14px; font-size:13px;">
+    <button type="submit" style="background:var(--brand-blue); color:var(--brand-pink); border:none; border-radius:20px; padding:9px 16px; font-size:13px; font-weight:500; flex-shrink:0;">전송</button>
+</form>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .bubble-row { display: flex; padding: 3px 0; touch-action: pan-y; }
+    .bubble-row.mine { justify-content: flex-end; }
+    .bubble-row.other { justify-content: flex-start; align-items: flex-start; gap: 8px; }
+    .bubble-row.grouped.other { padding-left: 40px; } /* 아바타 자리만큼 들여쓰기 유지 */
+    .bubble-col { display: flex; flex-direction: column; max-width: 75%; }
+    .bubble-sender-name { font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+    .bubble { padding: 8px 12px; border-radius: 14px; font-size: 13px; word-break: break-word; transition: box-shadow 0.3s; }
+    .bubble.mine { background: var(--brand-blue); color: var(--brand-pink); }
+    .bubble.other { background: #fff; border: 0.5px solid var(--border); color: var(--text-primary); }
+    .bubble img.chat-image { max-width: 160px; border-radius: 10px; display: block; cursor: pointer; }
+    .bubble-time { font-size: 10px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; align-self: flex-end; }
+    .reply-quote { font-size: 11px; color: var(--text-secondary); background: var(--bg-page, #F5F2EA); border-left: 2px solid var(--brand-blue); padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; }
+    #chat-context-menu { display: none; position: fixed; background: #fff; border: 0.5px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.18); z-index: 1000; overflow: hidden; }
+    #chat-context-menu div { padding: 10px 18px; font-size: 13px; cursor: pointer; }
+    #chat-context-menu div:active { background: var(--bg-page, #F5F2EA); }
+    .photo-thumb { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 8px; }
+    .photo-thumb .remove-btn {
+        position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; border-radius: 50%;
+        background: #1a1a1a; color: #fff; border: none; display: flex; align-items: center; justify-content: center;
+        font-size: 10px; cursor: pointer; padding: 0;
+    }
+</style>
+<div id="chat-context-menu"><div id="chat-context-reply">답장</div></div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var listEl = document.getElementById('message-list');
+    var roomId = listEl.dataset.roomId;
+    var initialMessages = JSON.parse(document.getElementById('initial-messages').textContent);
+    var previousBuilt = null; // 직전에 그린 메시지 정보 { is_mine, time, timeEl } - 같은 분 묶음 판단용
+    var lastDateKey = null; // 날짜 구분선을 언제 새로 넣을지 판단용
+
+    function scrollToBottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    function lastMessageId() {
+        var rows = listEl.querySelectorAll('[data-id]');
+        if (rows.length === 0) return 0;
+        return rows[rows.length - 1].dataset.id;
+    }
+
+    // ---- PC 우클릭 컨텍스트 메뉴 ----
+    var menuEl = document.getElementById('chat-context-menu');
+    var menuReplyEl = document.getElementById('chat-context-reply');
+    var menuTarget = null;
+
+    function showContextMenu(x, y, m) {
+        menuTarget = m;
+        menuEl.style.left = x + 'px';
+        menuEl.style.top = y + 'px';
+        menuEl.style.display = 'block';
+    }
+    function hideContextMenu() {
+        menuEl.style.display = 'none';
+        menuTarget = null;
+    }
+    menuReplyEl.onclick = function () {
+        if (menuTarget) startReply(menuTarget.id, menuTarget.sender_nickname, menuTarget.content || '(사진)');
+        hideContextMenu();
+    };
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('scroll', hideContextMenu);
+
+    // ---- 모바일 왼쪽 스와이프로 답장 ----
+    function attachSwipe(el, m) {
+        var startX = 0, startY = 0, dragging = false;
+        el.addEventListener('touchstart', function (e) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            dragging = true;
+        }, { passive: true });
+        el.addEventListener('touchmove', function (e) {
+            if (!dragging) return;
+            var dx = e.touches[0].clientX - startX;
+            var dy = e.touches[0].clientY - startY;
+            if (Math.abs(dx) > Math.abs(dy) && dx < 0) {
+                el.style.transform = 'translateX(' + Math.max(dx, -56) + 'px)';
+            }
+        }, { passive: true });
+        el.addEventListener('touchend', function () {
+            if (!dragging) return;
+            dragging = false;
+            var moved = el.style.transform;
+            el.style.transition = 'transform 0.15s';
+            el.style.transform = '';
+            setTimeout(function () { el.style.transition = ''; }, 150);
+            var dx = parseFloat((moved.match(/-?\d+(\.\d+)?/) || [0])[0]) || 0;
+            if (dx <= -50) {
+                startReply(m.id, m.sender_nickname, m.content || '(사진)');
+            }
+        });
+    }
+
+    function jumpToMessage(id) {
+        var target = listEl.querySelector('[data-id="' + id + '"]');
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        var bubbleEl = target.querySelector('.bubble');
+        if (bubbleEl) {
+            bubbleEl.style.boxShadow = '0 0 0 2px var(--brand-blue)';
+            setTimeout(function () { bubbleEl.style.boxShadow = 'none'; }, 900);
+        }
+    }
+
+    function buildMessage(m) {
+        // 날짜가 바뀌면 구분선을 먼저 넣고, 그 날의 첫 메시지이니 묶음도 새로 시작한다.
+        if (m.date_key !== lastDateKey) {
+            var divider = document.createElement('div');
+            divider.style.textAlign = 'center';
+            divider.style.margin = '10px 0';
+            var pill = document.createElement('span');
+            pill.style.cssText = 'display:inline-block; background:#e6e3da; color:var(--text-secondary); font-size:11px; padding:4px 12px; border-radius:12px;';
+            pill.textContent = m.date_label;
+            divider.appendChild(pill);
+            listEl.appendChild(divider);
+            lastDateKey = m.date_key;
+            previousBuilt = null;
+        }
+
+        // "분이 바뀔 때만" 새로 표시 - 같은 사람이 보냈어도 시간(분)이 다르면 새 묶음으로 취급한다.
+        var isSameGroup = !!previousBuilt && previousBuilt.is_mine === m.is_mine && previousBuilt.time === m.time;
+        var isGrouped = !m.is_mine && isSameGroup; // 상대 메시지 묶음이면 이름/사진 생략
+
+        var row = document.createElement('div');
+        row.className = 'bubble-row ' + (m.is_mine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '');
+        row.dataset.id = m.id;
+
+        if (!m.is_mine && !isGrouped) {
+            var avatarWrap;
+            if (m.sender_photo_url) {
+                avatarWrap = document.createElement('img');
+                avatarWrap.src = m.sender_photo_url;
+                avatarWrap.style.objectFit = 'cover';
+            } else {
+                avatarWrap = document.createElement('div');
+            }
+            avatarWrap.className = 'avatar round';
+            avatarWrap.style.width = '32px';
+            avatarWrap.style.height = '32px';
+            avatarWrap.style.flexShrink = '0';
+            row.appendChild(avatarWrap);
+        }
+
+        var col = document.createElement('div');
+        col.className = 'bubble-col';
+
+        if (!m.is_mine && !isGrouped) {
+            var nameEl = document.createElement('div');
+            nameEl.className = 'bubble-sender-name';
+            nameEl.textContent = m.sender_nickname;
+            col.appendChild(nameEl);
+        }
+
+        if (m.reply) {
+            var quote = document.createElement('div');
+            quote.className = 'reply-quote';
+            // 인용된 답장 내용이 지금 보낼 메시지 내용보다 길면 답장 쪽을 줄여서 균형을 맞춘다.
+            var quoteLimit = m.content ? m.content.length : 20;
+            var snippet = m.reply.snippet;
+            if (snippet.length > quoteLimit) {
+                snippet = snippet.slice(0, quoteLimit) + '...';
+            }
+            quote.textContent = m.reply.sender_name + '에게 답장: ' + snippet;
+            quote.onclick = function (e) { e.stopPropagation(); jumpToMessage(m.reply.id); };
+            col.appendChild(quote);
+        }
+
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble ' + (m.is_mine ? 'mine' : 'other');
+        if (m.image_url) {
+            var chatImg = document.createElement('img');
+            chatImg.src = m.image_url;
+            chatImg.className = 'chat-image';
+            chatImg.onclick = function (e) { e.stopPropagation(); openLightbox(m.image_url); };
+            bubble.appendChild(chatImg);
+        }
+        if (m.content) {
+            var textEl = document.createElement('div');
+            textEl.textContent = m.content;
+            bubble.appendChild(textEl);
+        }
+        col.appendChild(bubble);
+
+        var timeEl = document.createElement('span');
+        timeEl.className = 'bubble-time';
+        timeEl.textContent = m.time;
+        col.appendChild(timeEl);
+
+        // 같은 분(=같은 묶음)이면 이전 메시지의 시간 표시는 감춘다 - 지금 메시지가 그 묶음의 새 마지막이 된다.
+        if (isSameGroup && previousBuilt.timeEl) {
+            previousBuilt.timeEl.style.display = 'none';
+        }
+
+        row.appendChild(col);
+
+        // 답장 트리거: PC는 우클릭, 모바일은 왼쪽 스와이프
+        row.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            showContextMenu(e.clientX, e.clientY, m);
+        });
+        attachSwipe(row, m);
+
+        listEl.appendChild(row);
+        previousBuilt = { is_mine: m.is_mine, time: m.time, timeEl: timeEl };
+    }
+
+    initialMessages.forEach(buildMessage);
+    scrollToBottom();
+
+    function poll() {
+        fetch('/chat/' + roomId + '/poll/?after=' + lastMessageId())
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach(buildMessage);
+                    scrollToBottom();
+                }
+            })
+            .catch(function () { /* 폴링 실패는 조용히 무시하고 다음 주기에 재시도 */ });
+    }
+    setInterval(poll, 3000);
+
+    window.startReply = function (id, name, snippet) {
+        document.getElementById('reply-to-input').value = id;
+        document.getElementById('reply-preview-name').textContent = name;
+        document.getElementById('reply-preview-snippet').textContent = snippet.slice(0, 30);
+        document.getElementById('reply-preview').style.display = 'flex';
+    };
+    window.cancelReply = function () {
+        document.getElementById('reply-to-input').value = '';
+        document.getElementById('reply-preview').style.display = 'none';
+    };
+
+    // "+" 버튼 눌러서 카메라/앨범 선택 메뉴 토글.
+    var plusBtn = document.getElementById('plus-btn');
+    var plusMenu = document.getElementById('plus-menu');
+    plusBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        plusMenu.style.display = plusMenu.style.display === 'block' ? 'none' : 'block';
+    });
+    document.addEventListener('click', function () { plusMenu.style.display = 'none'; });
+
+    // 카메라는 한 장 찍으면 바로 전송 (새로고침 없이).
+    document.getElementById('camera-input').addEventListener('change', function () {
+        if (this.files.length > 0) {
+            submitFormAjax();
+        }
+    });
+
+    // ---- 앨범에서 여러 장 선택 -> 미리보기 + 개별 취소 후 "전송" 버튼으로 한 번에 보내기 ----
+    // 사진 하나 추가/삭제할 때마다 미리보기 전체를 다시 그리면(innerHTML 초기화) 화면이 깜빡이고,
+    // 이미 떠있던 사진들의 URL까지 매번 새로 만들어져서 메모리도 계속 쌓인다.
+    // 그래서 "추가되는 사진 하나만 DOM에 붙이고, 삭제되는 사진 하나만 DOM에서 뗀다" 방식으로 바꿨다.
+    var galleryInput = document.getElementById('gallery-input');
+    var previewStrip = document.getElementById('photo-preview-strip');
+    var pendingPhotos = []; // { id, file, url, el }
+    var nextPhotoId = 0;
+
+    // 네이티브 file input의 FileList는 직접 못 건드리니, DataTransfer로 다시 만들어서 끼워 넣는다.
+    function syncInputFiles() {
+        var dataTransfer = new DataTransfer();
+        pendingPhotos.forEach(function (p) { dataTransfer.items.add(p.file); });
+        galleryInput.files = dataTransfer.files;
+    }
+
+    function addPhoto(file) {
+        var id = nextPhotoId++;
+        var url = URL.createObjectURL(file);
+
+        var thumb = document.createElement('div');
+        thumb.className = 'photo-thumb';
+
+        var img = document.createElement('img');
+        img.src = url;
+        thumb.appendChild(img);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i>';
+        removeBtn.onclick = function () { removePhoto(id); };
+        thumb.appendChild(removeBtn);
+
+        previewStrip.appendChild(thumb);
+        previewStrip.style.display = 'flex';
+        pendingPhotos.push({ id: id, file: file, url: url, el: thumb });
+    }
+
+    function removePhoto(id) {
+        var index = pendingPhotos.findIndex(function (p) { return p.id === id; });
+        if (index === -1) return;
+        var photo = pendingPhotos[index];
+        photo.el.remove(); // 이 썸네일 하나만 떼어낸다 - 나머지는 손 안 댐
+        URL.revokeObjectURL(photo.url); // 더 이상 안 쓰는 URL은 바로 정리
+        pendingPhotos.splice(index, 1);
+        syncInputFiles();
+        if (pendingPhotos.length === 0) {
+            previewStrip.style.display = 'none';
+        }
+    }
+
+    galleryInput.addEventListener('change', function () {
+        Array.from(this.files).forEach(addPhoto);
+        syncInputFiles();
+    });
+
+    var sendForm = document.getElementById('send-form');
+    var contentInput = document.getElementById('content-input');
+
+    function clearComposer() {
+        // 전송 후 다음 메시지를 바로 이어 칠 수 있도록 입력창/미리보기/답장 상태를 초기화하고 포커스를 되돌린다.
+        contentInput.value = '';
+        cancelReply();
+        pendingPhotos.forEach(function (p) { URL.revokeObjectURL(p.url); });
+        pendingPhotos = [];
+        previewStrip.innerHTML = '';
+        previewStrip.style.display = 'none';
+        galleryInput.value = '';
+        document.getElementById('camera-input').value = '';
+        contentInput.focus();
+    }
+
+    function submitFormAjax() {
+        var formData = new FormData(sendForm);
+        fetch(window.location.pathname, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                (data.messages || []).forEach(buildMessage);
+                scrollToBottom();
+            })
+            .catch(function () {
+                // 실패하면 굳이 입력값을 지우지 않는다 - 사용자가 다시 눌러볼 수 있게.
+            });
+        clearComposer();
+    }
+
+    sendForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitFormAjax();
+    });
+});
+</script>
+{% endblock %}

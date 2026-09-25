@@ -1,0 +1,39 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}대화{% endblock %}
+
+{% block content %}
+{% if rows %}
+    <div style="display:flex; flex-direction:column;">
+    {% for row in rows %}
+        <a href="{% url 'chat_room' row.room.id %}" style="text-decoration:none; color:inherit;">
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:0.5px solid var(--border);">
+                {% if row.other.profile_photo %}
+                    <img src="{{ row.other.profile_photo.url }}" class="avatar round" alt="">
+                {% else %}
+                    <div class="avatar round"></div>
+                {% endif %}
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:500; color:var(--text-primary);">{{ row.other.nickname }}</div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        {% if row.last_message %}{% if row.last_message.content %}{{ row.last_message.content }}{% elif row.last_message.image %}(사진){% endif %}{% else %}대화를 시작해보세요{% endif %}
+                    </div>
+                </div>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                    {% if row.last_message %}
+                        <span style="font-size:10px; color:var(--text-muted);">{{ row.last_message_time }}</span>
+                    {% endif %}
+                    {% if row.unread_count %}
+                        <span style="width:16px; height:16px; border-radius:50%; background:var(--brand-pink); color:var(--brand-blue); font-size:10px; display:flex; align-items:center; justify-content:center;">{{ row.unread_count }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+    {% endfor %}
+    </div>
+{% else %}
+    <div class="card" style="text-align:center; padding:40px 16px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin:0;">아직 대화가 없어.<br>매칭 리스트에서 프로필을 열고 대화를 시작해봐.</p>
+    </div>
+{% endif %}
+{% endblock %}

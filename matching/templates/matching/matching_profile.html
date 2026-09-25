@@ -9,7 +9,7 @@
 {% block content %}
 <div class="card" style="text-align:center; padding:20px 16px; margin-bottom:12px;">
     {% if profile.profile_photo %}
-        <img src="{{ profile.profile_photo.url }}" style="width:96px; height:96px; border-radius:50%; object-fit:cover;" alt="">
+        <img src="{{ profile.profile_photo.url }}" onclick="openLightbox('{{ profile.profile_photo.url }}')" style="width:96px; height:96px; border-radius:50%; object-fit:cover; cursor:pointer;" alt="">
     {% else %}
         <div class="avatar round" style="width:96px; height:96px; margin:0 auto;"></div>
     {% endif %}
@@ -45,9 +45,10 @@
 </div>
 
 <div style="display:flex; gap:8px; margin-top:14px;">
-    <div style="flex:1;">
-        <button type="button" class="btn-primary" disabled>대화하기 (준비중)</button>
-    </div>
+    <form method="post" action="{% url 'chat_start' profile.id %}" style="flex:1;">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary">대화하기</button>
+    </form>
     <form method="post" action="{% url 'matching_like' profile.id %}" style="flex:1;">
         {% csrf_token %}
         <button type="submit" class="btn-primary{% if liked %} btn-liked{% endif %}">

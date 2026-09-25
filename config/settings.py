@@ -50,6 +50,7 @@ INSTALLED_APPS = [
 
     'accounts',  # 우리 회원 앱
     'matching',  # 매칭 조건/리스트/좋아요
+    'chat',  # 대화방/메시지
 
     'allauth',
     'allauth.account',
@@ -160,7 +161,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Seoul'
 
 USE_I18N = True
 

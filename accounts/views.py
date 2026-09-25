@@ -1,5 +1,9 @@
+from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import ProfileSetupForm
@@ -76,3 +80,24 @@ def profile_setup(request):
         form = ProfileSetupForm(instance=user)
 
     return render(request, "accounts/profile_setup.html", {"form": form})
+
+
+@staff_member_required
+def dev_login_as_list(request):
+    """
+    개발 중 테스트용. 카카오 계정이 없는 create_test_users 계정들로 즉시 로그인 전환할 수 있게
+    목록을 보여준다. 실제 배포(DEBUG=False)에서는 아예 접근 자체가 막힌다.
+    """
+    if not settings.DEBUG:
+        raise Http404
+    test_users = User.objects.filter(username__startswith="test_").order_by("gender", "nickname")
+    return render(request, "accounts/dev_login_as.html", {"test_users": test_users})
+
+
+@staff_member_required
+def dev_login_as(request, user_id):
+    if not settings.DEBUG:
+        raise Http404
+    target = get_object_or_404(User, id=user_id)
+    login(request, target, backend="django.contrib.auth.backends.ModelBackend")
+    return redirect("home")

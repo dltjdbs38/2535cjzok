@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>테스트 계정 로그인 (개발용)</title>
+</head>
+<body style="font-family: sans-serif; max-width: 480px; margin: 40px auto;">
+
+<h2>테스트 계정으로 로그인</h2>
+<p style="color:#888; font-size:13px;">DEBUG 모드에서만 보이는 개발용 화면이야. 눌러서 로그인하면 지금 admin 세션은 그 계정으로 교체돼.</p>
+
+<ul style="list-style:none; padding:0;">
+{% for u in test_users %}
+    <li style="margin-bottom:8px;">
+        <form method="post" action="{% url 'dev_login_as' u.id %}">
+            {% csrf_token %}
+            <button type="submit" style="width:100%; text-align:left; padding:10px; border-radius:8px; border:1px solid #ddd; background:#fafafa;">
+                {{ u.nickname }} ({{ u.get_gender_display }}, {{ u.birth_year }}년생, {{ u.height_cm }}cm)
+            </button>
+        </form>
+    </li>
+{% empty %}
+    <li>테스트 계정이 없어. <code>python manage.py create_test_users</code>로 먼저 만들어봐.</li>
+{% endfor %}
+</ul>
+
+</body>
+</html>
