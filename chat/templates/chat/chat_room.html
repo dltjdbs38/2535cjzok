@@ -3,16 +3,42 @@
 {% block header_title %}대화{% endblock %}
 
 {% block content %}
-<div style="display:flex; align-items:center; gap:6px; margin:-14px -14px 12px; padding:10px 14px; border-bottom:0.5px solid var(--border);">
-    <a href="#" data-fallback-url="{% url 'chat_list' %}" onclick="if (window.history.length > 1) { history.back(); } else { window.location.href = this.dataset.fallbackUrl; } return false;" style="color:var(--text-primary); text-decoration:none; display:flex; align-items:center; gap:4px; font-size:13px; font-weight:500;">
+<div style="display:flex; align-items:center; gap:6px; margin:-14px -14px 12px; padding:10px 14px; border-bottom:0.5px solid var(--border); position:relative;">
+    <a href="#" data-fallback-url="{% url 'chat_list' %}" onclick="if (window.history.length > 1) { history.back(); } else { window.location.href = this.dataset.fallbackUrl; } return false;" style="color:var(--text-primary); text-decoration:none; display:flex; align-items:center; gap:4px; font-size:13px; font-weight:500; flex:1;">
         <i class="ti ti-chevron-left" aria-hidden="true"></i>{{ other.nickname }}
     </a>
+    <a href="{% url 'manner_rating' room.id %}" style="font-size:11px; color:var(--brand-blue); text-decoration:none; margin-right:10px;">후기 남기기</a>
+    <button type="button" id="room-menu-btn" style="background:none; border:none; color:var(--text-primary); font-size:18px; padding:0; cursor:pointer;">
+        <i class="ti ti-menu-2" aria-hidden="true"></i>
+    </button>
+    <div id="room-menu" style="display:none; position:absolute; top:38px; right:14px; background:#fff; border:0.5px solid var(--border); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.18); overflow:hidden; width:130px; z-index:20;">
+        {% if is_left %}
+            <form method="post" action="{% url 'chat_rejoin' room.id %}">
+                {% csrf_token %}
+                <button type="submit" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; font-size:12px; color:var(--brand-blue); cursor:pointer;">다시 대화하기</button>
+            </form>
+        {% else %}
+            <form method="post" action="{% url 'chat_leave' room.id %}">
+                {% csrf_token %}
+                <button type="submit" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; font-size:12px; color:#A32D2D; cursor:pointer;">채팅 나가기</button>
+            </form>
+        {% endif %}
+    </div>
 </div>
 <div id="message-list" data-room-id="{{ room.id }}" style="display:flex; flex-direction:column; gap:4px;"></div>
 {{ message_list|json_script:"initial-messages" }}
 {% endblock %}
 
 {% block bottom_nav %}
+{% if is_left %}
+    <div style="display:flex; align-items:center; justify-content:center; gap:10px; border-top:0.5px solid var(--border); background:#fff; padding:14px;">
+        <span style="font-size:12px; color:var(--text-secondary);">채팅을 나간 상태야.</span>
+        <form method="post" action="{% url 'chat_rejoin' room.id %}">
+            {% csrf_token %}
+            <button type="submit" style="background:var(--brand-blue); color:var(--brand-pink); border:none; border-radius:16px; padding:6px 14px; font-size:12px; font-weight:500;">다시 대화하기</button>
+        </form>
+    </div>
+{% else %}
 <div id="reply-preview" style="display:none; align-items:center; gap:8px; background:#fff; border-top:0.5px solid var(--border); padding:8px 12px;">
     <div style="flex:1; font-size:11px; color:var(--text-secondary); border-left:2px solid var(--brand-blue); padding-left:8px;">
         <span id="reply-preview-name" style="font-weight:500;"></span>에게 답장<br>
@@ -43,6 +69,7 @@
            style="flex:1; border-radius:20px; border:0.5px solid var(--border); padding:9px 14px; font-size:13px;">
     <button type="submit" style="background:var(--brand-blue); color:var(--brand-pink); border:none; border-radius:20px; padding:9px 16px; font-size:13px; font-weight:500; flex-shrink:0;">전송</button>
 </form>
+{% endif %}
 {% endblock %}
 
 {% block extra_head %}
@@ -167,6 +194,21 @@ document.addEventListener('DOMContentLoaded', function () {
             previousBuilt = null;
         }
 
+        // 퇴장/재입장 안내 같은 시스템 메시지는 말풍선이 아니라 날짜구분선처럼 가운데 배지로 표시.
+        if (m.is_system) {
+            var sysDivider = document.createElement('div');
+            sysDivider.dataset.id = m.id;
+            sysDivider.style.textAlign = 'center';
+            sysDivider.style.margin = '6px 0';
+            var sysPill = document.createElement('span');
+            sysPill.style.cssText = 'display:inline-block; background:#e6e3da; color:var(--text-secondary); font-size:11px; padding:4px 12px; border-radius:12px;';
+            sysPill.textContent = m.content;
+            sysDivider.appendChild(sysPill);
+            listEl.appendChild(sysDivider);
+            previousBuilt = null;
+            return;
+        }
+
         // "분이 바뀔 때만" 새로 표시 - 같은 사람이 보냈어도 시간(분)이 다르면 새 묶음으로 취급한다.
         var isSameGroup = !!previousBuilt && previousBuilt.is_mine === m.is_mine && previousBuilt.time === m.time;
         var isGrouped = !m.is_mine && isSameGroup; // 상대 메시지 묶음이면 이름/사진 생략
@@ -271,127 +313,139 @@ document.addEventListener('DOMContentLoaded', function () {
     setInterval(poll, 3000);
 
     window.startReply = function (id, name, snippet) {
-        document.getElementById('reply-to-input').value = id;
+        var replyInput = document.getElementById('reply-to-input');
+        if (!replyInput) return; // 채팅을 나간 상태면 입력창 자체가 없다.
+        replyInput.value = id;
         document.getElementById('reply-preview-name').textContent = name;
         document.getElementById('reply-preview-snippet').textContent = snippet.slice(0, 30);
         document.getElementById('reply-preview').style.display = 'flex';
     };
     window.cancelReply = function () {
-        document.getElementById('reply-to-input').value = '';
+        var replyInput = document.getElementById('reply-to-input');
+        if (!replyInput) return;
+        replyInput.value = '';
         document.getElementById('reply-preview').style.display = 'none';
     };
 
-    // "+" 버튼 눌러서 카메라/앨범 선택 메뉴 토글.
-    var plusBtn = document.getElementById('plus-btn');
-    var plusMenu = document.getElementById('plus-menu');
-    plusBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        plusMenu.style.display = plusMenu.style.display === 'block' ? 'none' : 'block';
-    });
-    document.addEventListener('click', function () { plusMenu.style.display = 'none'; });
-
-    // 카메라는 한 장 찍으면 바로 전송 (새로고침 없이).
-    document.getElementById('camera-input').addEventListener('change', function () {
-        if (this.files.length > 0) {
-            submitFormAjax();
-        }
-    });
-
-    // ---- 앨범에서 여러 장 선택 -> 미리보기 + 개별 취소 후 "전송" 버튼으로 한 번에 보내기 ----
-    // 사진 하나 추가/삭제할 때마다 미리보기 전체를 다시 그리면(innerHTML 초기화) 화면이 깜빡이고,
-    // 이미 떠있던 사진들의 URL까지 매번 새로 만들어져서 메모리도 계속 쌓인다.
-    // 그래서 "추가되는 사진 하나만 DOM에 붙이고, 삭제되는 사진 하나만 DOM에서 뗀다" 방식으로 바꿨다.
-    var galleryInput = document.getElementById('gallery-input');
-    var previewStrip = document.getElementById('photo-preview-strip');
-    var pendingPhotos = []; // { id, file, url, el }
-    var nextPhotoId = 0;
-
-    // 네이티브 file input의 FileList는 직접 못 건드리니, DataTransfer로 다시 만들어서 끼워 넣는다.
-    function syncInputFiles() {
-        var dataTransfer = new DataTransfer();
-        pendingPhotos.forEach(function (p) { dataTransfer.items.add(p.file); });
-        galleryInput.files = dataTransfer.files;
-    }
-
-    function addPhoto(file) {
-        var id = nextPhotoId++;
-        var url = URL.createObjectURL(file);
-
-        var thumb = document.createElement('div');
-        thumb.className = 'photo-thumb';
-
-        var img = document.createElement('img');
-        img.src = url;
-        thumb.appendChild(img);
-
-        var removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'remove-btn';
-        removeBtn.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i>';
-        removeBtn.onclick = function () { removePhoto(id); };
-        thumb.appendChild(removeBtn);
-
-        previewStrip.appendChild(thumb);
-        previewStrip.style.display = 'flex';
-        pendingPhotos.push({ id: id, file: file, url: url, el: thumb });
-    }
-
-    function removePhoto(id) {
-        var index = pendingPhotos.findIndex(function (p) { return p.id === id; });
-        if (index === -1) return;
-        var photo = pendingPhotos[index];
-        photo.el.remove(); // 이 썸네일 하나만 떼어낸다 - 나머지는 손 안 댐
-        URL.revokeObjectURL(photo.url); // 더 이상 안 쓰는 URL은 바로 정리
-        pendingPhotos.splice(index, 1);
-        syncInputFiles();
-        if (pendingPhotos.length === 0) {
-            previewStrip.style.display = 'none';
-        }
-    }
-
-    galleryInput.addEventListener('change', function () {
-        Array.from(this.files).forEach(addPhoto);
-        syncInputFiles();
-    });
-
+    // 채팅을 나간 상태면 입력창 자체가 화면에 없으니, 아래 입력 관련 코드는 전부 건너뛴다.
     var sendForm = document.getElementById('send-form');
-    var contentInput = document.getElementById('content-input');
+    if (sendForm) {
+        var contentInput = document.getElementById('content-input');
 
-    function clearComposer() {
-        // 전송 후 다음 메시지를 바로 이어 칠 수 있도록 입력창/미리보기/답장 상태를 초기화하고 포커스를 되돌린다.
-        contentInput.value = '';
-        cancelReply();
-        pendingPhotos.forEach(function (p) { URL.revokeObjectURL(p.url); });
-        pendingPhotos = [];
-        previewStrip.innerHTML = '';
-        previewStrip.style.display = 'none';
-        galleryInput.value = '';
-        document.getElementById('camera-input').value = '';
-        contentInput.focus();
-    }
+        // "+" 버튼 눌러서 카메라/앨범 선택 메뉴 토글.
+        var plusBtn = document.getElementById('plus-btn');
+        var plusMenu = document.getElementById('plus-menu');
+        plusBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            plusMenu.style.display = plusMenu.style.display === 'block' ? 'none' : 'block';
+        });
+        document.addEventListener('click', function () { plusMenu.style.display = 'none'; });
 
-    function submitFormAjax() {
-        var formData = new FormData(sendForm);
-        fetch(window.location.pathname, {
-            method: 'POST',
-            body: formData,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                (data.messages || []).forEach(buildMessage);
-                scrollToBottom();
+        // 카메라는 한 장 찍으면 바로 전송 (새로고침 없이).
+        document.getElementById('camera-input').addEventListener('change', function () {
+            if (this.files.length > 0) {
+                submitFormAjax();
+            }
+        });
+
+        // ---- 앨범에서 여러 장 선택 -> 미리보기 + 개별 취소 후 "전송" 버튼으로 한 번에 보내기 ----
+        var galleryInput = document.getElementById('gallery-input');
+        var previewStrip = document.getElementById('photo-preview-strip');
+        var pendingPhotos = []; // { id, file, url, el }
+        var nextPhotoId = 0;
+
+        function syncInputFiles() {
+            var dataTransfer = new DataTransfer();
+            pendingPhotos.forEach(function (p) { dataTransfer.items.add(p.file); });
+            galleryInput.files = dataTransfer.files;
+        }
+
+        function addPhoto(file) {
+            var id = nextPhotoId++;
+
+            var thumb = document.createElement('div');
+            thumb.className = 'photo-thumb';
+
+            var img = document.createElement('img');
+            thumb.appendChild(img);
+            if (window.FileReader) {
+                var reader = new FileReader();
+                reader.onload = function (e) { img.src = e.target.result; };
+                reader.readAsDataURL(file);
+            }
+
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i>';
+            removeBtn.onclick = function () { removePhoto(id); };
+            thumb.appendChild(removeBtn);
+
+            previewStrip.appendChild(thumb);
+            previewStrip.style.display = 'flex';
+            pendingPhotos.push({ id: id, file: file, el: thumb });
+        }
+
+        function removePhoto(id) {
+            var index = pendingPhotos.findIndex(function (p) { return p.id === id; });
+            if (index === -1) return;
+            var photo = pendingPhotos[index];
+            photo.el.remove();
+            pendingPhotos.splice(index, 1);
+            syncInputFiles();
+            if (pendingPhotos.length === 0) {
+                previewStrip.style.display = 'none';
+            }
+        }
+
+        galleryInput.addEventListener('change', function () {
+            Array.from(this.files).forEach(addPhoto);
+            syncInputFiles();
+        });
+
+        var clearComposer = function () {
+            contentInput.value = '';
+            cancelReply();
+            pendingPhotos = [];
+            previewStrip.innerHTML = '';
+            previewStrip.style.display = 'none';
+            galleryInput.value = '';
+            document.getElementById('camera-input').value = '';
+            contentInput.focus();
+        };
+
+        var submitFormAjax = function () {
+            var formData = new FormData(sendForm);
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
             })
-            .catch(function () {
-                // 실패하면 굳이 입력값을 지우지 않는다 - 사용자가 다시 눌러볼 수 있게.
-            });
-        clearComposer();
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    (data.messages || []).forEach(buildMessage);
+                    scrollToBottom();
+                })
+                .catch(function () {});
+            clearComposer();
+        };
+
+        sendForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitFormAjax();
+        });
     }
 
-    sendForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        submitFormAjax();
-    });
+    // ---- 대화방 우측 상단 메뉴(채팅 나가기 / 다시 대화하기) ----
+    var roomMenuBtn = document.getElementById('room-menu-btn');
+    var roomMenu = document.getElementById('room-menu');
+    if (roomMenuBtn) {
+        roomMenuBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            roomMenu.style.display = roomMenu.style.display === 'block' ? 'none' : 'block';
+        });
+        document.addEventListener('click', function () { roomMenu.style.display = 'none'; });
+    }
 });
 </script>
 {% endblock %}

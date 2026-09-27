@@ -10,6 +10,14 @@ from .forms import ProfileSetupForm
 from .models import User
 
 
+@login_required
+def my_account(request):
+    """MY > 내 정보 눌렀을 때 나오는 상세 화면 - 상태 요약 + 프로필/조건 수정 바로가기."""
+    if not request.user.is_approved or request.user.is_blacklisted:
+        return redirect("home")
+    return render(request, "accounts/my_account.html", {"user": request.user})
+
+
 def home(request):
     """
     로그인 여부 + 가입 승인 상태에 따라 알맞은 화면으로 안내하는 입구 역할.
@@ -28,6 +36,14 @@ def home(request):
     # 블랙리스트(영구퇴출)는 심사 거부와 별개의, 훨씬 무거운 영구 차단이라 제일 먼저 체크한다.
     if user.is_blacklisted:
         return render(request, "accounts/blocked.html")
+
+    # 만난 지 30일이 지나도록 매너온도 평가를 안 준 상대가 있으면, 앱 어디로도 못 가고
+    # 평가부터 하게 막는다 (요구사항: 앱 들어가자마자 띄우기).
+    from chat.models import find_unrated_meeting_room
+
+    pending_room = find_unrated_meeting_room(user, only_if_30_days_passed=True)
+    if pending_room:
+        return redirect("manner_rating", room_id=pending_room.id)
 
     status = user.approval_status
     if status == User.ApprovalStatus.INCOMPLETE:
@@ -80,6 +96,48 @@ def profile_setup(request):
         form = ProfileSetupForm(instance=user)
 
     return render(request, "accounts/profile_setup.html", {"form": form})
+
+
+@login_required
+def my_page(request):
+    """
+    MY 탭. 내 정보 + 좋아요 프로필 미리보기(최근 몇 명) + 신고결과 + 회원탈퇴 진입점.
+    """
+    if not request.user.is_approved or request.user.is_blacklisted:
+        return redirect("home")
+
+    from matching.models import Like
+
+    liked_users = [
+        like.to_user
+        for like in Like.objects.filter(from_user=request.user).select_related("to_user").order_by("-created_at")[:3]
+    ]
+    liked_total = Like.objects.filter(from_user=request.user).count()
+
+    return render(
+        request,
+        "accounts/my_page.html",
+        {
+            "liked_users": liked_users,
+            "liked_total": liked_total,
+            "active_tab": "my",
+        },
+    )
+
+
+@login_required
+def likes_list(request):
+    """"더보기"로 들어오는, 좋아요 누른 전체 목록. 매칭 리스트랑 같은 카드 스타일을 그대로 쓴다."""
+    if not request.user.is_approved or request.user.is_blacklisted:
+        return redirect("home")
+
+    from matching.models import Like
+
+    liked_users = [
+        like.to_user
+        for like in Like.objects.filter(from_user=request.user).select_related("to_user").order_by("-created_at")
+    ]
+    return render(request, "accounts/likes_list.html", {"candidates": liked_users})
 
 
 @staff_member_required

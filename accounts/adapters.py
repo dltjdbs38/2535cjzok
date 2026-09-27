@@ -4,6 +4,23 @@ from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.core.files.base import ContentFile
 
 
+def download_kakao_photo(user, image_url):
+    """
+    카카오 프사 URL에서 실제 이미지를 받아 우리 서버(profile_photo)에 저장한다.
+    save_user(신규가입)와 pre_social_login(기존 회원 재로그인) 양쪽에서 재사용한다.
+    """
+    if not image_url:
+        return
+    try:
+        response = requests.get(image_url, timeout=5)
+        response.raise_for_status()
+        filename = f"kakao_{user.kakao_id}.jpg"
+        user.profile_photo.save(filename, ContentFile(response.content), save=True)
+    except Exception:
+        # 다운로드가 실패해도(네트워크 오류, 손상된 이미지 등) 로그인 자체는 막지 않는다.
+        pass
+
+
 class AccountAdapter(DefaultAccountAdapter):
     """
     일반(이메일/아이디+비밀번호) 회원가입을 완전히 막는 어댑터.
@@ -59,21 +76,22 @@ class KakaoSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         return user
 
+    def pre_social_login(self, request, sociallogin):
+        # save_user()는 "완전히 새로 가입하는 순간"에만 호출된다. 이미 가입된 회원이 재로그인할
+        # 때는 이 메서드가 대신 매번 불리는데, 여기서 profile_photo가 비어있는 경우(예: 이
+        # 다운로드 로직이 생기기 전에 가입했던 회원)를 채워 넣어준다. 이미 채워져 있으면 매번
+        # 다시 받아오진 않는다(불필요한 네트워크 요청 방지).
+        if sociallogin.is_existing:
+            user = sociallogin.user
+            if not user.profile_photo:
+                extra = sociallogin.account.extra_data
+                image_url = extra.get("kakao_account", {}).get("profile", {}).get("profile_image_url", "")
+                download_kakao_photo(user, image_url)
+
     def save_user(self, request, sociallogin, form=None):
         # populate_user()는 아직 저장 전 단계라 여기서(실제로 저장되는 시점) 사진을 다운로드한다.
         # 카카오 프사 URL은 사용자가 나중에 프사를 바꾸면 깨질 수 있어서,
         # 우리 서버 스토리지에 실제 파일로 복사해두고 화면에는 그 사본을 쓴다.
         user = super().save_user(request, sociallogin, form)
-
-        if user.profile_image_url and not user.profile_photo:
-            try:
-                response = requests.get(user.profile_image_url, timeout=5)
-                response.raise_for_status()
-                filename = f"kakao_{user.kakao_id}.jpg"
-                user.profile_photo.save(filename, ContentFile(response.content), save=True)
-            except Exception:
-                # 다운로드가 실패해도(네트워크 오류, 손상된 이미지 등) 회원가입 자체는 막지 않는다.
-                # 이 경우 profile_photo가 비어있는 채로 남고, 화면에선 기본 아바타로 대체된다.
-                pass
-
+        download_kakao_photo(user, user.profile_image_url)
         return user

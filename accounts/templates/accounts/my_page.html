@@ -1,0 +1,60 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}MY{% endblock %}
+
+{% block content %}
+<a href="{% url 'my_account' %}" style="text-decoration:none;">
+<div class="card list-item" style="margin-bottom:14px;">
+    {% if user.profile_photo %}
+        <img src="{{ user.profile_photo.url }}" class="avatar round" alt="">
+    {% else %}
+        <div class="avatar round"></div>
+    {% endif %}
+    <div style="flex:1;">
+        <div style="font-size:13px; font-weight:500; color:var(--text-primary);">{{ user.nickname }}</div>
+        <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">카카오 회원번호로 연동됨</div>
+    </div>
+    <i class="ti ti-chevron-right" style="color:var(--text-muted); font-size:16px;" aria-hidden="true"></i>
+</div>
+</a>
+
+<div style="margin-bottom:14px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; padding:0 2px;">
+        <span class="section-title" style="margin:0;">좋아요 프로필</span>
+        {% if liked_total > 3 %}
+            <a href="{% url 'likes_list' %}" style="font-size:11px; color:var(--text-secondary); text-decoration:none;">더보기</a>
+        {% endif %}
+    </div>
+    {% if liked_users %}
+        <div style="display:flex; flex-direction:column; gap:6px;">
+        {% for u in liked_users %}
+            <a href="{% url 'matching_profile' u.id %}" style="text-decoration:none;">
+                <div class="card list-item" style="padding:7px 9px;">
+                    {% if u.profile_photo %}
+                        <img src="{{ u.profile_photo.url }}" style="width:32px; height:32px; border-radius:8px; object-fit:cover;" alt="">
+                    {% else %}
+                        <div class="avatar" style="width:32px; height:32px;"></div>
+                    {% endif %}
+                    <span style="font-size:12px; color:var(--text-primary);">{{ u.birth_year }}년생 · {{ u.nickname }} · {{ u.height_cm }} · {{ u.weight_kg }} · {{ u.get_hobby_first_display }}</span>
+                </div>
+            </a>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div class="card" style="text-align:center; padding:16px;">
+            <p style="font-size:12px; color:var(--text-secondary); margin:0;">아직 좋아요한 프로필이 없어.</p>
+        </div>
+    {% endif %}
+</div>
+
+<div style="margin-bottom:14px;">
+    <div class="section-title">신고결과 확인</div>
+    <div class="card" style="text-align:center; padding:16px;">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0;">신고한 내역이 없어.</p>
+    </div>
+</div>
+
+<div style="text-align:center; margin-top:4px;">
+    <span style="font-size:12px; color:var(--text-muted);">회원탈퇴</span>
+</div>
+{% endblock %}

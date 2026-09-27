@@ -1,0 +1,21 @@
+<img id="preview-{{ widget.attrs.id }}" src="{% if widget.is_initial %}{{ widget.value.url }}{% endif %}" alt=""
+     style="width:100%; max-width:220px; border-radius:12px; margin-bottom:8px; border:0.5px solid var(--border); display:{% if widget.is_initial %}block{% else %}none{% endif %};">
+<label for="{{ widget.attrs.id }}" style="display:inline-block; background:var(--brand-blue); color:var(--brand-pink); border-radius:10px; padding:10px 16px; font-size:13px; font-weight:500; cursor:pointer;">
+    <span id="label-text-{{ widget.attrs.id }}">{% if widget.is_initial %}사진 바꾸기{% else %}사진 가져오기{% endif %}</span>
+</label>
+<input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}
+       onchange="(function(input){
+           var file = input.files && input.files[0];
+           if (!file) return;
+           var img = document.getElementById('preview-' + input.id);
+           var labelText = document.getElementById('label-text-' + input.id);
+           if (labelText) labelText.textContent = '사진 바꾸기';
+           if (window.FileReader) {
+               var reader = new FileReader();
+               reader.onload = function (e) {
+                   img.src = e.target.result;
+                   img.style.display = 'block';
+               };
+               reader.readAsDataURL(file);
+           }
+       })(this)">

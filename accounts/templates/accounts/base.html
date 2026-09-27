@@ -105,6 +105,11 @@
     </header>
 
     <main class="app-content">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="card" style="background:#FCEBEB; border-color:#F09595; color:#A32D2D; font-size:12px; margin-bottom:10px;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 
@@ -117,7 +122,7 @@
         <a href="{% url 'chat_list' %}" class="tab-item {% if active_tab == 'chat' %}active{% endif %}">
             <i class="ti ti-message-circle" aria-hidden="true"></i>대화
         </a>
-        <a href="#" class="tab-item {% if active_tab == 'my' %}active{% endif %}">
+        <a href="{% url 'my_page' %}" class="tab-item {% if active_tab == 'my' %}active{% endif %}">
             <i class="ti ti-user" aria-hidden="true"></i>MY
         </a>
     </nav>

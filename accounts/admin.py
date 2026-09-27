@@ -26,7 +26,7 @@ class CustomUserAdmin(UserAdmin):
     )
     list_filter = ("approval_status", "is_blacklisted", "gender", "religion", "is_smoker")
     search_fields = ("nickname", "kakao_id", "username")
-    actions = ["approve_users", "reject_users", "blacklist_users"]
+    actions = ["approve_users", "reject_users", "blacklist_users", "redownload_kakao_photo"]
 
     fieldsets = UserAdmin.fieldsets + (
         (
@@ -35,7 +35,7 @@ class CustomUserAdmin(UserAdmin):
         ),
         (
             "심사용 업로드 사진",
-            {"fields": ("face_photo", "body_photo", "photo_preview")},
+            {"fields": ("face_photo", "body_photo", "showcase_photo", "photo_preview")},
         ),
         (
             "매칭 프로필",
@@ -69,9 +69,9 @@ class CustomUserAdmin(UserAdmin):
     )
     readonly_fields = UserAdmin.readonly_fields + ("photo_preview",)
 
-    @admin.display(description="사진 비교(카톡프사 / 얼굴 / 전신)")
+    @admin.display(description="사진 비교(카톡프사 / 얼굴 / 전신 / 취향사진)")
     def photo_preview(self, obj):
-        # 카톡 프로필사진과 사용자가 직접 올린 얼굴/전신사진을 한 줄로 보여줘서
+        # 카톡 프로필사진과 사용자가 직접 올린 얼굴/전신/취향사진을 한 줄로 보여줘서
         # 사진 도용 여부를 눈으로 바로 비교할 수 있게 한다.
         items = [
             (url, label)
@@ -79,6 +79,7 @@ class CustomUserAdmin(UserAdmin):
                 (obj.profile_photo.url if obj.profile_photo else "", "카톡(우리서버 사본)"),
                 (obj.face_photo.url if obj.face_photo else "", "얼굴"),
                 (obj.body_photo.url if obj.body_photo else "", "전신"),
+                (obj.showcase_photo.url if obj.showcase_photo else "", "취향사진"),
             ]
             if url
         ]
@@ -118,3 +119,18 @@ class CustomUserAdmin(UserAdmin):
     def blacklist_users(self, request, queryset):
         updated = queryset.update(is_blacklisted=True)
         self.message_user(request, f"{updated}명 블랙리스트 처리했어. 이제 동일 카카오 계정으로 다시는 가입/심사를 받을 수 없어.")
+
+    @admin.action(description="선택한 회원의 카카오 프로필사진 다시 다운로드")
+    def redownload_kakao_photo(self, request, queryset):
+        # 다운로드 로직이 생기기 전에 가입했던 회원처럼 profile_photo가 비어있는 경우를
+        # 재로그인 없이 관리자가 바로 채워줄 수 있게 하는 수동 액션.
+        from .adapters import download_kakao_photo
+
+        succeeded = 0
+        for user in queryset:
+            before = bool(user.profile_photo)
+            download_kakao_photo(user, user.profile_image_url)
+            user.refresh_from_db()
+            if user.profile_photo and not before:
+                succeeded += 1
+        self.message_user(request, f"{queryset.count()}명 중 {succeeded}명 다운로드 성공.")

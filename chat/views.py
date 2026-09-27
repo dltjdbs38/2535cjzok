@@ -1,16 +1,26 @@
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.models import User
-from .models import ChatRoom, Message
-from .utils import date_key, format_chat_timestamp, format_date_divider
+from .models import (
+    ChatRoom,
+    MannerRating,
+    Message,
+    active_room_count_for,
+    apply_manner_rating,
+    find_unrated_meeting_room,
+)
+from .utils import date_key, format_chat_timestamp, format_date_divider, format_message_clock
+
+MAX_ACTIVE_CHATS = 3
 
 
 def _require_approved(view_func):
     def wrapped(request, *args, **kwargs):
-        if not request.user.is_approved:
+        if not request.user.is_approved or request.user.is_blacklisted:
             return redirect("home")
         return view_func(request, *args, **kwargs)
 
@@ -38,9 +48,10 @@ def _serialize_message(m, viewer):
     return {
         "id": m.id,
         "is_mine": m.sender_id == viewer.id,
+        "is_system": m.is_system,
         "content": m.content,
         "image_url": m.image.url if m.image else None,
-        "time": format_chat_timestamp(m.created_at),
+        "time": format_message_clock(m.created_at),
         "date_label": format_date_divider(m.created_at),
         "date_key": date_key(m.created_at),
         "reply": reply,
@@ -60,6 +71,24 @@ def start_chat(request, user_id):
         return redirect("matching_profile", user_id=user_id)
 
     target = get_object_or_404(User, id=user_id, approval_status=User.ApprovalStatus.APPROVED)
+
+    # 이미 이 상대랑 방이 있으면(재입장) 매너온도 체크 없이 그냥 들여보낸다.
+    existing_room = ChatRoom.objects.filter(
+        Q(participant_1=request.user, participant_2=target) | Q(participant_1=target, participant_2=request.user)
+    ).first()
+
+    if existing_room is None:
+        # 완전히 새로운 상대와 첫 대화방을 만들려는 시점 - 이전에 만난 사람 중
+        # 아직 매너온도 평가를 안 준 사람이 있으면, 그 평가부터 하게 막는다.
+        pending_room = find_unrated_meeting_room(request.user, only_if_30_days_passed=False)
+        if pending_room:
+            return redirect("manner_rating", room_id=pending_room.id)
+
+        # 이미 나가지 않은 대화방이 3개면, 새 대화는 못 만들고 누군가를 먼저 나가야 한다.
+        if active_room_count_for(request.user) >= MAX_ACTIVE_CHATS:
+            messages.error(request, f"최대 {MAX_ACTIVE_CHATS}명까지만 동시에 대화할 수 있어. 다른 채팅방을 먼저 나가줘.")
+            return redirect("chat_list")
+
     room = ChatRoom.get_or_create_between(request.user, target)
     return redirect("chat_room", room_id=room.id)
 
@@ -83,6 +112,7 @@ def chat_list(request):
                 "last_message": last_message,
                 "last_message_time": format_chat_timestamp(last_message.created_at) if last_message else "",
                 "unread_count": room.unread_count_for(request.user),
+                "is_left": room.is_left_by(request.user),
             }
         )
 
@@ -97,6 +127,12 @@ def chat_room(request, room_id):
         return redirect("chat_list")
 
     if request.method == "POST":
+        # 채팅을 나간 상태면 "다시 대화하기"부터 해야 메시지를 보낼 수 있다.
+        if room.is_left_by(request.user):
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"error": "채팅을 나간 상태야. 다시 대화하기를 먼저 눌러줘."}, status=403)
+            return redirect("chat_room", room_id=room.id)
+
         content = request.POST.get("content", "").strip()
         images = request.FILES.getlist("image")  # 앨범에서 여러 장을 골랐을 수 있다
         reply_to_id = request.POST.get("reply_to") or None
@@ -143,6 +179,7 @@ def chat_room(request, room_id):
             "room": room,
             "other": room.other_participant(request.user),
             "message_list": message_list,
+            "is_left": room.is_left_by(request.user),
         },
     )
 
@@ -166,3 +203,79 @@ def poll_messages(request, room_id):
 
     data = [_serialize_message(m, request.user) for m in new_messages]
     return JsonResponse({"messages": data})
+
+
+@login_required
+@_require_approved
+def confirm_meeting(request, room_id):
+    """"실제로 만났어요" 버튼. 둘 중 한 명만 눌러도 그 방은 "만남 확정" 상태가 된다."""
+    room = _room_or_403(room_id, request.user)
+    if room is None:
+        return redirect("chat_list")
+    if request.method == "POST" and not room.meeting_confirmed:
+        room.confirm_meeting()
+    return redirect("chat_room", room_id=room.id)
+
+
+@login_required
+@_require_approved
+def manner_rating(request, room_id):
+    """
+    후기(매너온도 평가) 화면. 여기 들어오는 것 자체가 "실제로 만났다"는 뜻이므로,
+    아직 만남 확정이 안 된 방이면 여기서 자동으로 확정 처리한다.
+    강제로(새 대화 시작 시 / 30일 경과 후 접속 시) 여기로 보내질 수도 있고, 직접 들어올 수도 있다.
+    """
+    room = _room_or_403(room_id, request.user)
+    if room is None:
+        return redirect("chat_list")
+    if not room.meeting_confirmed:
+        room.confirm_meeting()
+
+    other = room.other_participant(request.user)
+    already_rated = MannerRating.objects.filter(room=room, rater=request.user).exists()
+
+    if request.method == "POST":
+        if not already_rated:
+            stars = int(request.POST.get("stars", 3))
+            apply_manner_rating(
+                rater=request.user,
+                ratee=other,
+                room=room,
+                stars=stars,
+                flag_photo_mismatch=bool(request.POST.get("flag_photo_mismatch")),
+                flag_condition_mismatch=bool(request.POST.get("flag_condition_mismatch")),
+                flag_abusive_or_noshow=bool(request.POST.get("flag_abusive_or_noshow")),
+            )
+        return redirect("home")
+
+    return render(
+        request,
+        "chat/manner_rating.html",
+        {"room": room, "other": other, "already_rated": already_rated},
+    )
+
+
+@login_required
+@_require_approved
+def leave_chat(request, room_id):
+    room = _room_or_403(room_id, request.user)
+    if room is None:
+        return redirect("chat_list")
+    if request.method == "POST" and not room.is_left_by(request.user):
+        room.leave(request.user)
+    return redirect("chat_list")
+
+
+@login_required
+@_require_approved
+def rejoin_chat(request, room_id):
+    room = _room_or_403(room_id, request.user)
+    if room is None:
+        return redirect("chat_list")
+    if request.method == "POST" and room.is_left_by(request.user):
+        # 재입장도 "새 대화방 만들기"랑 똑같이 3명 제한에 걸린다 - 이미 3명이면 재입장도 막는다.
+        if active_room_count_for(request.user) >= MAX_ACTIVE_CHATS:
+            messages.error(request, f"최대 {MAX_ACTIVE_CHATS}명까지만 동시에 대화할 수 있어. 다른 채팅방을 먼저 나가줘.")
+            return redirect("chat_list")
+        room.rejoin(request.user)
+    return redirect("chat_room", room_id=room.id)

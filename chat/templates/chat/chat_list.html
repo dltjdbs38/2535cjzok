@@ -6,29 +6,34 @@
 {% if rows %}
     <div style="display:flex; flex-direction:column;">
     {% for row in rows %}
-        <a href="{% url 'chat_room' row.room.id %}" style="text-decoration:none; color:inherit;">
-            <div style="display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:0.5px solid var(--border);">
-                {% if row.other.profile_photo %}
-                    <img src="{{ row.other.profile_photo.url }}" class="avatar round" alt="">
-                {% else %}
-                    <div class="avatar round"></div>
-                {% endif %}
-                <div style="flex:1; min-width:0;">
-                    <div style="font-size:13px; font-weight:500; color:var(--text-primary);">{{ row.other.nickname }}</div>
-                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        {% if row.last_message %}{% if row.last_message.content %}{{ row.last_message.content }}{% elif row.last_message.image %}(사진){% endif %}{% else %}대화를 시작해보세요{% endif %}
+        <div class="chat-row" data-room-id="{{ row.room.id }}" data-left="{% if row.is_left %}1{% else %}0{% endif %}">
+            <a href="{% url 'chat_room' row.room.id %}" style="text-decoration:none; color:inherit;">
+                <div style="display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:0.5px solid var(--border);">
+                    {% if row.other.profile_photo %}
+                        <img src="{{ row.other.profile_photo.url }}" class="avatar round" alt="">
+                    {% else %}
+                        <div class="avatar round"></div>
+                    {% endif %}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:13px; font-weight:500; color:var(--text-primary);">{{ row.other.nickname }}</div>
+                        <div style="font-size:12px; color:var(--text-secondary); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            {% if row.last_message %}{% if row.last_message.content %}{{ row.last_message.content }}{% elif row.last_message.image %}(사진){% endif %}{% else %}대화를 시작해보세요{% endif %}
+                        </div>
+                        {% if row.is_left %}
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">나간 채팅방입니다.</div>
+                        {% endif %}
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                        {% if row.last_message %}
+                            <span style="font-size:10px; color:var(--text-muted);">{{ row.last_message_time }}</span>
+                        {% endif %}
+                        {% if row.unread_count %}
+                            <span style="width:16px; height:16px; border-radius:50%; background:var(--brand-pink); color:var(--brand-blue); font-size:10px; display:flex; align-items:center; justify-content:center;">{{ row.unread_count }}</span>
+                        {% endif %}
                     </div>
                 </div>
-                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-                    {% if row.last_message %}
-                        <span style="font-size:10px; color:var(--text-muted);">{{ row.last_message_time }}</span>
-                    {% endif %}
-                    {% if row.unread_count %}
-                        <span style="width:16px; height:16px; border-radius:50%; background:var(--brand-pink); color:var(--brand-blue); font-size:10px; display:flex; align-items:center; justify-content:center;">{{ row.unread_count }}</span>
-                    {% endif %}
-                </div>
-            </div>
-        </a>
+            </a>
+        </div>
     {% endfor %}
     </div>
 {% else %}
@@ -36,4 +41,68 @@
         <p style="font-size:13px; color:var(--text-secondary); margin:0;">아직 대화가 없어.<br>매칭 리스트에서 프로필을 열고 대화를 시작해봐.</p>
     </div>
 {% endif %}
+
+<form method="post" id="room-action-form" style="display:none;">{% csrf_token %}</form>
+<div id="chat-list-context-menu" style="display:none; position:fixed; background:#fff; border:0.5px solid var(--border); border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.18); z-index:1000; overflow:hidden;">
+    <div id="chat-list-context-action" style="padding:10px 18px; font-size:13px; cursor:pointer;"></div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var menuEl = document.getElementById('chat-list-context-menu');
+    var actionEl = document.getElementById('chat-list-context-action');
+    var actionForm = document.getElementById('room-action-form');
+    var currentRow = null;
+
+    function showMenu(x, y, row) {
+        currentRow = row;
+        var isLeft = row.dataset.left === '1';
+        actionEl.textContent = isLeft ? '다시 대화하기' : '채팅 나가기';
+        actionEl.style.color = isLeft ? 'var(--brand-blue)' : '#A32D2D';
+        menuEl.style.left = x + 'px';
+        menuEl.style.top = y + 'px';
+        menuEl.style.display = 'block';
+    }
+    function hideMenu() {
+        menuEl.style.display = 'none';
+        currentRow = null;
+    }
+
+    actionEl.addEventListener('click', function () {
+        if (!currentRow) return;
+        var roomId = currentRow.dataset.roomId;
+        var isLeft = currentRow.dataset.left === '1';
+        actionForm.action = '/chat/' + roomId + (isLeft ? '/rejoin/' : '/leave/');
+        actionForm.submit();
+    });
+
+    document.addEventListener('click', hideMenu);
+
+    document.querySelectorAll('.chat-row').forEach(function (row) {
+        row.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            showMenu(e.clientX, e.clientY, row);
+        });
+
+        var startX = 0, startY = 0, dragging = false;
+        row.addEventListener('touchstart', function (e) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            dragging = true;
+        }, { passive: true });
+        row.addEventListener('touchmove', function (e) {
+            if (!dragging) return;
+            var dx = e.touches[0].clientX - startX;
+            var dy = e.touches[0].clientY - startY;
+            if (dx > 40 && Math.abs(dx) > Math.abs(dy)) {
+                dragging = false;
+                showMenu(startX + 40, startY, row);
+            }
+        }, { passive: true });
+        row.addEventListener('touchend', function () { dragging = false; });
+    });
+});
+</script>
 {% endblock %}

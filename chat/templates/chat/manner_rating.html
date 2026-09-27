@@ -1,0 +1,63 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}매너온도 평가{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+{% if already_rated %}
+    <div class="card" style="text-align:center; padding:32px 16px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin:0;">{{ other.nickname }}님은 이미 평가했어.</p>
+        <a href="{% url 'home' %}"><button type="button" class="btn-primary" style="margin-top:14px;">확인</button></a>
+    </div>
+{% else %}
+    <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin:0;">
+            <strong style="color:var(--text-primary);">{{ other.nickname }}</strong>님과의 만남은 어땠어?<br>
+            다음 대화를 이어가려면 먼저 평가를 남겨줘.
+        </p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="card" style="margin-bottom:10px;">
+            <div class="section-title">전반적인 별점</div>
+            <div style="display:flex; gap:8px;">
+                <label style="flex:1; text-align:center; border:0.5px solid var(--border); border-radius:10px; padding:10px 0; font-size:13px; cursor:pointer;">
+                    <input type="radio" name="stars" value="1" style="display:none;">1점
+                </label>
+                <label style="flex:1; text-align:center; border:0.5px solid var(--border); border-radius:10px; padding:10px 0; font-size:13px; cursor:pointer;">
+                    <input type="radio" name="stars" value="3" checked style="display:none;">3점
+                </label>
+                <label style="flex:1; text-align:center; border:0.5px solid var(--border); border-radius:10px; padding:10px 0; font-size:13px; cursor:pointer;">
+                    <input type="radio" name="stars" value="5" style="display:none;">5점
+                </label>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px;">
+            <div class="section-title">혹시 아래 중 해당하는 항목이 있다면 전부 체크해줘</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:8px 0; border-bottom:0.5px solid var(--border);">
+                <input type="checkbox" name="flag_photo_mismatch">사진/외모 스펙과 실물이 동일하지 않았어요
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:8px 0; border-bottom:0.5px solid var(--border);">
+                <input type="checkbox" name="flag_condition_mismatch">나이 및 직업/조건이 동일하지 않았어요
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:8px 0;">
+                <input type="checkbox" name="flag_abusive_or_noshow">욕설/성적인 만남 제안/당일 파토를 했어요
+            </label>
+        </div>
+
+        <button type="submit" class="btn-primary">평가 제출</button>
+    </form>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    input[type=radio]:checked + text,
+    label:has(input[type=radio]:checked) {
+        background: var(--brand-blue); border-color: var(--brand-blue); color: var(--brand-pink);
+    }
+</style>
+{% endblock %}

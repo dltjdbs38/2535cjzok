@@ -79,6 +79,8 @@ class User(AbstractUser):
     religion = models.CharField(max_length=20, choices=Religion.choices, blank=True)
     is_smoker = models.BooleanField(null=True, blank=True)  # 흡연 여부
     intro = models.CharField(max_length=20, blank=True, default="-")  # 소개 한마디, 최대 20자
+    # 필수는 아닌, 내가 좋아하는/나를 표현하는 사진 한 장. 매칭 프로필 상세에 노출된다.
+    showcase_photo = models.ImageField(upload_to="showcase/", blank=True)
 
     # --- 가입 승인 심사용 업로드 사진 (카카오톡 프사와 대조해서 본인 확인하는 용도) ---
     face_photo = models.ImageField(upload_to="approval/face/", null=True, blank=True)

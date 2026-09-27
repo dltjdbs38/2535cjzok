@@ -19,7 +19,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from accounts.views import dev_login_as, dev_login_as_list, home, profile_setup
+from accounts.views import dev_login_as, dev_login_as_list, home, likes_list, my_account, my_page, profile_setup
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,6 +27,9 @@ urlpatterns = [
     path('profile/setup/', profile_setup, name='profile_setup'),  # 얼굴/전신사진 등 프로필 등록
     path('matching/', include('matching.urls')),  # 매칭 리스트/프로필/조건설정/좋아요
     path('chat/', include('chat.urls')),  # 대화 목록/대화방
+    path('my/', my_page, name='my_page'),
+    path('my/account/', my_account, name='my_account'),
+    path('my/likes/', likes_list, name='likes_list'),
     path('dev/login-as/', dev_login_as_list, name='dev_login_as_list'),  # 테스트 계정 로그인 전환 (DEBUG 전용)
     path('dev/login-as/<int:user_id>/', dev_login_as, name='dev_login_as'),
     path('', home, name='home'),
