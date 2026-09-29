@@ -18,6 +18,17 @@ def my_account(request):
     return render(request, "accounts/my_account.html", {"user": request.user})
 
 
+@login_required
+def withdraw_account(request):
+    """
+    회원탈퇴. 확인 문구는 화면(JS confirm)에서 이미 보여주고 눌렀다는 전제로,
+    여기서는 실제 처리만 한다. GET으로 잘못 들어오는 경우는 그냥 돌려보낸다.
+    """
+    if request.method == "POST":
+        request.user.withdraw()
+    return redirect("home")
+
+
 def home(request):
     """
     로그인 여부 + 가입 승인 상태에 따라 알맞은 화면으로 안내하는 입구 역할.
@@ -107,12 +118,14 @@ def my_page(request):
         return redirect("home")
 
     from matching.models import Like
+    from chat.models import Report
 
     liked_users = [
         like.to_user
         for like in Like.objects.filter(from_user=request.user).select_related("to_user").order_by("-created_at")[:3]
     ]
     liked_total = Like.objects.filter(from_user=request.user).count()
+    my_reports = Report.objects.filter(reporter=request.user).select_related("reported_user")
 
     return render(
         request,
@@ -120,6 +133,7 @@ def my_page(request):
         {
             "liked_users": liked_users,
             "liked_total": liked_total,
+            "my_reports": my_reports,
             "active_tab": "my",
         },
     )

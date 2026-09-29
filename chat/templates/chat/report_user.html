@@ -1,0 +1,113 @@
+{% extends "accounts/base.html" %}
+
+{% block header_title %}신고하기{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:12px;">
+    <p style="font-size:13px; color:var(--text-secondary); margin:0;">
+        <strong style="color:var(--text-primary);">{{ other.nickname }}</strong>님을 신고할게.<br>
+        관리자가 검토한 후 처리 결과를 안내해줄게.
+    </p>
+</div>
+
+<form method="post" enctype="multipart/form-data" id="report-form">
+    {% csrf_token %}
+
+    <div class="card" style="margin-bottom:10px;">
+        <div class="section-title">신고 사유 (필수)</div>
+        {% for value, label in reasons %}
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:8px 0; border-bottom:0.5px solid var(--border);">
+                <input type="radio" name="reason" value="{{ value }}" {% if value == selected_reason or forloop.first and not selected_reason %}checked{% endif %}>{{ label }}
+            </label>
+        {% endfor %}
+        {% if errors.reason %}<div class="errorlist">{{ errors.reason }}</div>{% endif %}
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+        <div class="section-title">상세 설명 (필수)</div>
+        <textarea name="detail" rows="4" maxlength="500" placeholder="상황을 자세히 적어주면 검토에 도움이 돼"
+                  style="width:100%; border-radius:10px; border:0.5px solid var(--border); padding:9px 10px; font-size:13px; font-family:inherit; resize:vertical;">{{ detail_value }}</textarea>
+        {% if errors.detail %}<div class="errorlist">{{ errors.detail }}</div>{% endif %}
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+        <div class="section-title">증거 사진 (필수)</div>
+        <div id="evidence-preview-strip" style="display:none; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
+        <label for="evidence-input" style="display:inline-block; background:var(--brand-blue); color:var(--brand-pink); border-radius:10px; padding:9px 16px; font-size:12px; font-weight:500; cursor:pointer;">
+            사진 추가
+        </label>
+        <input type="file" name="evidence" id="evidence-input" accept="image/*" multiple style="display:none;">
+        {% if errors.evidence %}<div class="errorlist">{{ errors.evidence }}</div>{% endif %}
+    </div>
+
+    <button type="submit" class="btn-primary" style="background:#A32D2D;">신고하기</button>
+</form>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .evidence-thumb { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
+    .evidence-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 8px; }
+    .evidence-thumb .remove-btn {
+        position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; border-radius: 50%;
+        background: #1a1a1a; color: #fff; border: none; display: flex; align-items: center; justify-content: center;
+        font-size: 10px; cursor: pointer; padding: 0;
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var evidenceInput = document.getElementById('evidence-input');
+    var previewStrip = document.getElementById('evidence-preview-strip');
+    var pendingPhotos = []; // { id, file, el }
+    var nextId = 0;
+
+    function syncInputFiles() {
+        var dataTransfer = new DataTransfer();
+        pendingPhotos.forEach(function (p) { dataTransfer.items.add(p.file); });
+        evidenceInput.files = dataTransfer.files;
+    }
+
+    function addPhoto(file) {
+        var id = nextId++;
+        var thumb = document.createElement('div');
+        thumb.className = 'evidence-thumb';
+
+        var img = document.createElement('img');
+        thumb.appendChild(img);
+        if (window.FileReader) {
+            var reader = new FileReader();
+            reader.onload = function (e) { img.src = e.target.result; };
+            reader.readAsDataURL(file);
+        }
+
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i>';
+        removeBtn.onclick = function () { removePhoto(id); };
+        thumb.appendChild(removeBtn);
+
+        previewStrip.appendChild(thumb);
+        previewStrip.style.display = 'flex';
+        pendingPhotos.push({ id: id, file: file, el: thumb });
+    }
+
+    function removePhoto(id) {
+        var index = pendingPhotos.findIndex(function (p) { return p.id === id; });
+        if (index === -1) return;
+        pendingPhotos[index].el.remove();
+        pendingPhotos.splice(index, 1);
+        syncInputFiles();
+        if (pendingPhotos.length === 0) {
+            previewStrip.style.display = 'none';
+        }
+    }
+
+    evidenceInput.addEventListener('change', function () {
+        Array.from(this.files).forEach(addPhoto);
+        syncInputFiles();
+    });
+});
+</script>
+{% endblock %}

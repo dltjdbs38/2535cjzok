@@ -11,4 +11,5 @@ urlpatterns = [
     path("<int:room_id>/manner-rating/", views.manner_rating, name="manner_rating"),
     path("<int:room_id>/leave/", views.leave_chat, name="chat_leave"),
     path("<int:room_id>/rejoin/", views.rejoin_chat, name="chat_rejoin"),
+    path("<int:room_id>/report/", views.report_user, name="report_user"),
 ]

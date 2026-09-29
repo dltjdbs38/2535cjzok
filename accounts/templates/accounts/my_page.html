@@ -49,12 +49,48 @@
 
 <div style="margin-bottom:14px;">
     <div class="section-title">신고결과 확인</div>
-    <div class="card" style="text-align:center; padding:16px;">
-        <p style="font-size:12px; color:var(--text-secondary); margin:0;">신고한 내역이 없어.</p>
-    </div>
+    {% if my_reports %}
+        <div style="display:flex; flex-direction:column; gap:6px;">
+        {% for report in my_reports %}
+            <div class="card list-item" style="padding:7px 9px;">
+                {% if report.reported_user.profile_photo %}
+                    <img src="{{ report.reported_user.profile_photo.url }}" style="width:32px; height:32px; border-radius:8px; object-fit:cover;" alt="">
+                {% else %}
+                    <div class="avatar" style="width:32px; height:32px;"></div>
+                {% endif %}
+                <span style="font-size:12px; color:var(--text-primary); flex:1;">{{ report.reported_user.birth_year }}년생 · {{ report.reported_user.nickname }}</span>
+                {% if report.status == "RESOLVED_BLACKLISTED" %}
+                    <span class="badge badge-success">탈퇴완료</span>
+                {% elif report.status == "DISMISSED" %}
+                    <span class="badge" style="color:var(--text-muted); background:var(--bg-page);">반려</span>
+                {% else %}
+                    <span class="badge badge-warning">검토중</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div class="card" style="text-align:center; padding:16px;">
+            <p style="font-size:12px; color:var(--text-secondary); margin:0;">신고한 내역이 없어.</p>
+        </div>
+    {% endif %}
 </div>
 
 <div style="text-align:center; margin-top:4px;">
-    <span style="font-size:12px; color:var(--text-muted);">회원탈퇴</span>
+    <form method="post" action="{% url 'withdraw_account' %}" id="withdraw-form">
+        {% csrf_token %}
+        <button type="button" onclick="confirmWithdraw()" style="background:none; border:none; font-size:12px; color:var(--text-muted); cursor:pointer;">회원탈퇴</button>
+    </form>
 </div>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+    function confirmWithdraw() {
+        var message = '정말로 탈퇴하시겠습니까? 탈퇴하여도 신고/대화 내역은 보존되며, 재가입은 2회까지만 가능하니 신중하게 결정해주세요. 활동을 180일간 하지 않으면 휴면계정으로 전환되어 매칭되지 않습니다.';
+        showConfirmModal(message, function () {
+            document.getElementById('withdraw-form').submit();
+        }, '탈퇴하기');
+    }
+</script>
 {% endblock %}

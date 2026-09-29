@@ -9,6 +9,8 @@ from .models import (
     ChatRoom,
     MannerRating,
     Message,
+    Report,
+    ReportImage,
     active_room_count_for,
     apply_manner_rating,
     find_unrated_meeting_room,
@@ -279,3 +281,61 @@ def rejoin_chat(request, room_id):
             return redirect("chat_list")
         room.rejoin(request.user)
     return redirect("chat_room", room_id=room.id)
+
+
+@login_required
+@_require_approved
+def report_user(request, room_id):
+    """
+    신고하기. 매너온도랑 마찬가지로 "만남이 성사된(meeting_confirmed) 방"에서만 가능하다.
+    관리자가 승인하면 신고 1건만으로 즉시 블랙리스트 처리된다 (매너온도 체크항목의 "2회 누적"
+    규칙보다 훨씬 무거운 사안을 다루기 때문).
+    """
+    room = _room_or_403(room_id, request.user)
+    if room is None:
+        return redirect("chat_list")
+    if not room.meeting_confirmed:
+        # 아직 만난 적 없다고 표시된 방에서는 신고 자체가 안 열린다.
+        return redirect("chat_room", room_id=room.id)
+
+    other = room.other_participant(request.user)
+    errors = {}
+
+    if request.method == "POST":
+        reason = request.POST.get("reason", "")
+        detail = request.POST.get("detail", "").strip()
+        evidence_images = request.FILES.getlist("evidence")
+
+        if reason not in Report.Reason.values:
+            errors["reason"] = "모든 항목에 응답해주세요"
+        if not detail:
+            errors["detail"] = "모든 항목에 응답해주세요"
+        if not evidence_images:
+            errors["evidence"] = "모든 항목에 응답해주세요"
+
+        if not errors:
+            report = Report.objects.create(
+                room=room, reporter=request.user, reported_user=other, reason=reason, detail=detail[:500]
+            )
+            for image in evidence_images:
+                ReportImage.objects.create(report=report, image=image)
+            return redirect("chat_room", room_id=room.id)
+
+        return render(
+            request,
+            "chat/report_user.html",
+            {
+                "room": room,
+                "other": other,
+                "reasons": Report.Reason.choices,
+                "errors": errors,
+                "selected_reason": reason,
+                "detail_value": detail,
+            },
+        )
+
+    return render(
+        request,
+        "chat/report_user.html",
+        {"room": room, "other": other, "reasons": Report.Reason.choices, "errors": errors},
+    )

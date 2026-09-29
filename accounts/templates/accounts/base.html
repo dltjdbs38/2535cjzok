@@ -144,5 +144,38 @@
         document.getElementById('lightbox-overlay').style.display = 'none';
     }
 </script>
+
+<!-- 어느 페이지에서든 showConfirmModal(message, onConfirm)만 호출하면, OS의 기본 confirm() 대신
+     우리 디자인 그대로의 확인창을 띄울 수 있는 공용 모달. 안드로이드/iOS/PC 어디서든 동일하게 보인다. -->
+<div id="confirm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1001; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:#fff; border-radius:16px; padding:20px; max-width:320px; width:100%;">
+        <p id="confirm-modal-message" style="font-size:13px; color:var(--text-primary); line-height:1.6; margin:0 0 18px; white-space:pre-line;"></p>
+        <div style="display:flex; gap:8px;">
+            <button type="button" id="confirm-modal-cancel" style="flex:1; background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:11px; font-size:13px; color:var(--text-secondary); cursor:pointer;">취소</button>
+            <button type="button" id="confirm-modal-ok" style="flex:1; background:#A32D2D; color:#fff; border:none; border-radius:10px; padding:11px; font-size:13px; font-weight:500; cursor:pointer;">확인</button>
+        </div>
+    </div>
+</div>
+<script>
+    var _confirmModalCallback = null;
+    function showConfirmModal(message, onConfirm, confirmLabel) {
+        document.getElementById('confirm-modal-message').textContent = message;
+        document.getElementById('confirm-modal-ok').textContent = confirmLabel || '확인';
+        _confirmModalCallback = onConfirm;
+        document.getElementById('confirm-modal-overlay').style.display = 'flex';
+    }
+    function closeConfirmModal() {
+        document.getElementById('confirm-modal-overlay').style.display = 'none';
+        _confirmModalCallback = null;
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('confirm-modal-cancel').addEventListener('click', closeConfirmModal);
+        document.getElementById('confirm-modal-ok').addEventListener('click', function () {
+            var callback = _confirmModalCallback;
+            closeConfirmModal();
+            if (callback) callback();
+        });
+    });
+</script>
 </body>
 </html>

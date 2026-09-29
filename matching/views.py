@@ -1,6 +1,9 @@
+import datetime
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from accounts.models import User
 from .forms import MatchingPreferenceForm
@@ -76,11 +79,15 @@ def _candidates_for(viewer, preference):
     - 음악 취향(유사도 매칭)은 프로토타입 범위에서 제외 - 지금은 정보 표시만 하고 필터링엔 안 씀
     """
     opposite_gender = User.Gender.FEMALE if viewer.gender == User.Gender.MALE else User.Gender.MALE
+    dormant_cutoff = timezone.now() - datetime.timedelta(days=User.DORMANT_AFTER_DAYS)
 
     qs = User.objects.filter(
         approval_status=User.ApprovalStatus.APPROVED,
         gender=opposite_gender,
     ).exclude(id=viewer.id)
+    # 휴면계정(180일 이상 미접속)은 매칭 대상에서 제외한다. last_login이 아예 없는 경우는
+    # (테스트 계정 등) 휴면으로 취급하지 않는다.
+    qs = qs.filter(Q(last_login__isnull=True) | Q(last_login__gte=dormant_cutoff))
 
     if preference.preferred_regions_list:
         qs = qs.filter(region__in=preference.preferred_regions_list)

@@ -1,8 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.utils import timezone
 from django.utils.html import format_html_join
+from django.utils.safestring import mark_safe
 
 from .models import User
+
+
+class DormantFilter(admin.SimpleListFilter):
+    # is_dormant는 저장된 필드가 아니라 그때그때 계산되는 프로퍼티라서, list_filter에
+    # 바로 못 넣는다. 대신 이렇게 SimpleListFilter로 last_login 기준을 직접 계산해서 걸러준다.
+    title = "휴면 여부"
+    parameter_name = "dormant"
+
+    def lookups(self, request, model_admin):
+        return (("yes", "휴면계정 (180일 이상 미접속)"), ("no", "정상"))
+
+    def queryset(self, request, queryset):
+        cutoff = timezone.now() - timezone.timedelta(days=User.DORMANT_AFTER_DAYS)
+        if self.value() == "yes":
+            return queryset.filter(last_login__lt=cutoff)
+        if self.value() == "no":
+            return queryset.filter(last_login__gte=cutoff) | queryset.filter(last_login__isnull=True)
+        return queryset
 
 
 @admin.register(User)
@@ -20,11 +40,13 @@ class CustomUserAdmin(UserAdmin):
         "region",
         "approval_status",
         "rejection_count",
-        "is_blacklisted",
+        "blacklist_badge",
+        "dormant_badge",
+        "withdrawal_count",
         "manner_temp",
         "profile_submitted_at",
     )
-    list_filter = ("approval_status", "is_blacklisted", "gender", "religion", "is_smoker")
+    list_filter = ("approval_status", "is_blacklisted", DormantFilter, "gender", "religion", "is_smoker")
     search_fields = ("nickname", "kakao_id", "username")
     actions = ["approve_users", "reject_users", "blacklist_users", "redownload_kakao_photo"]
 
@@ -61,6 +83,7 @@ class CustomUserAdmin(UserAdmin):
                     "rejected_reason",
                     "rejection_count",
                     "is_blacklisted",
+                    "withdrawal_count",
                     "profile_submitted_at",
                     "manner_temp",
                 )
@@ -91,6 +114,23 @@ class CustomUserAdmin(UserAdmin):
             '<img src="{}" style="height:80px;border-radius:4px;"><br>{}</div>',
             items,
         )
+
+    @admin.display(description="블랙리스트", boolean=False)
+    def blacklist_badge(self, obj):
+        # 기본 체크박스 아이콘보다 눈에 확 띄게, 색깔 있는 배지로 보여준다.
+        if obj.is_blacklisted:
+            return mark_safe(
+                '<span style="background:#FCEBEB; color:#A32D2D; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:500;">블랙리스트</span>'
+            )
+        return mark_safe('<span style="color:#b3b1a8; font-size:11px;">-</span>')
+
+    @admin.display(description="휴면")
+    def dormant_badge(self, obj):
+        if obj.is_dormant:
+            return mark_safe(
+                '<span style="background:#FAEEDA; color:#854F0B; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:500;">휴면</span>'
+            )
+        return mark_safe('<span style="color:#b3b1a8; font-size:11px;">-</span>')
 
     @admin.action(description="선택한 회원 승인 처리 (거부 횟수 초기화)")
     def approve_users(self, request, queryset):

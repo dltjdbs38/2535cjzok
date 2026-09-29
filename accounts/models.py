@@ -100,6 +100,11 @@ class User(AbstractUser):
     is_blacklisted = models.BooleanField(default=False)
     profile_submitted_at = models.DateTimeField(null=True, blank=True)  # 프로필 제출 시각 (3일 SLA 기준)
     manner_temp = models.DecimalField(max_digits=4, decimal_places=1, default=36.5)  # 매너온도
+    # 회원탈퇴 누적 횟수. 탈퇴할 때마다 1씩 늘고, 이미 2번 재가입을 다 쓴 상태에서 또 탈퇴하면
+    # 그 즉시 영구 차단(is_blacklisted)된다.
+    withdrawal_count = models.PositiveSmallIntegerField(default=0)
+
+    DORMANT_AFTER_DAYS = 180
 
     @property
     def is_approved(self):
@@ -111,6 +116,54 @@ class User(AbstractUser):
         # 거부됐지만 아직 영구퇴출(블랙리스트)까지는 안 간 상태 - 다시 프로필을 낼 수 있다.
         # (영구퇴출은 거부 2회째에 자동으로 켜지므로, 여기 도달했다는 건 항상 1회째 거부라는 뜻)
         return self.approval_status == self.ApprovalStatus.REJECTED and not self.is_blacklisted
+
+    @property
+    def is_dormant(self):
+        # 별도 배치 작업(cron) 없이, "마지막 로그인 시각"만으로 그때그때 실시간 계산한다.
+        # 그래서 다시 로그인하는 순간 last_login이 자동으로 갱신되고, 이 값도 즉시 False로
+        # 돌아온다 - "별도 절차 없이 다시 쓸 수 있게" 요구사항이 저절로 만족된다.
+        if not self.last_login:
+            return False
+        from django.utils import timezone
+
+        return (timezone.now() - self.last_login).days >= self.DORMANT_AFTER_DAYS
+
+    def withdraw(self):
+        """
+        회원탈퇴. 행(row) 자체는 지우지 않는다 - 이 사람이 보낸 메시지/신고/매너온도 평가
+        기록이 이 행을 참조하고 있어서, 지워버리면 그 내역들이 다 깨진다(FK 무결성).
+        대신 프로필을 전부 초기화해서 "다시 가입 절차를 밟아야 하는 상태"로 되돌린다.
+        이미 재가입을 2번 다 쓴 상태(withdrawal_count>=2)에서 또 탈퇴하면, 그걸로 영구 차단한다.
+        """
+        if self.withdrawal_count >= 2:
+            self.is_blacklisted = True
+            self.save(update_fields=["is_blacklisted"])
+            return
+
+        self.withdrawal_count += 1
+        self.approval_status = self.ApprovalStatus.INCOMPLETE
+        self.rejection_count = 0
+        self.profile_submitted_at = None
+        self.face_photo = None
+        self.body_photo = None
+        self.showcase_photo = None
+        self.birth_year = None
+        self.gender = ""
+        self.height_cm = None
+        self.weight_kg = None
+        self.hobby_first = ""
+        self.hobby_second = ""
+        self.hobby_dislike = ""
+        self.region = ""
+        self.religion = ""
+        self.is_smoker = None
+        self.intro = "-"
+        self.save()
+
+        # 매칭 조건도 새로 설정하게 한다 (재가입이니 예전 조건이 그대로 남아있으면 안 됨).
+        from matching.models import MatchingPreference
+
+        MatchingPreference.objects.filter(user=self).delete()
 
     def __str__(self):
         return self.nickname or self.username

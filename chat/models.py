@@ -99,6 +99,46 @@ class ChatRoom(models.Model):
         )
 
 
+class Report(models.Model):
+    """
+    정식 신고. 매너온도 체크항목(2회 누적시 자동 블랙리스트)과 달리, 신고는 사진도용/학력·직업·
+    조건위조/성적인만남 제안처럼 훨씬 무거운 사안을 다루고, 관리자가 직접 검토해서 승인하면
+    그 즉시(1건만으로) 블랙리스트 처리한다. 매너온도랑 마찬가지로 "만남이 성사된 이후"에만 가능하다.
+    """
+
+    class Reason(models.TextChoices):
+        PHOTO_THEFT = "PHOTO_THEFT", "사진 도용/부적절한 사진 사용"
+        EDUCATION_FRAUD = "EDUCATION_FRAUD", "학력 위조"
+        JOB_FRAUD = "JOB_FRAUD", "직업 위조"
+        CONDITION_FRAUD = "CONDITION_FRAUD", "나이 및 조건 위조"
+        SEXUAL_SOLICITATION = "SEXUAL_SOLICITATION", "성적인 만남 제안"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "검토중"
+        RESOLVED_BLACKLISTED = "RESOLVED_BLACKLISTED", "탈퇴완료"
+        DISMISSED = "DISMISSED", "반려"
+
+    room = models.ForeignKey(ChatRoom, on_delete=models.SET_NULL, null=True, related_name="reports")
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reports_filed")
+    reported_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reports_received"
+    )
+    reason = models.CharField(max_length=30, choices=Reason.choices)
+    detail = models.CharField(max_length=500)  # 필수 항목
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ReportImage(models.Model):
+    """증거 사진. 신고 1건에 여러 장 첨부할 수 있다 (필수 - 최소 1장)."""
+
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to="report_evidence/")
+
+
 class Message(models.Model):
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="messages")
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
