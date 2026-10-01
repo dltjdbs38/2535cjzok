@@ -3,3 +3,6 @@ django-allauth==65.19.4
 requests==2.33.1
 python-dotenv==1.2.2
 Pillow==12.1.1
+gunicorn==23.0.0
+whitenoise==6.11.0
+dj-database-url==2.3.0

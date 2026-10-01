@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    restart: always
+    env_file: .env
+    volumes:
+      - ./media:/app/media
+      - ./db.sqlite3:/app/db.sqlite3
+    # 외부(인터넷)에는 직접 안 열고, 서버 안에서만(127.0.0.1) 열어둔다.
+    # 실제로 인터넷에 노출되는 건 nginx뿐이고, nginx가 이 포트로 요청을 넘겨준다.
+    ports:
+      - "127.0.0.1:8000:8000"

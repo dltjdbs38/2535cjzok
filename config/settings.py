@@ -34,7 +34,18 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+# 로컬 개발용 기본값 + 배포 시 .env(또는 호스팅 플랫폼의 환경변수)에 실제 도메인을 콤마로 나열.
+# 예: DJANGO_ALLOWED_HOSTS=2535cjzok.up.railway.app
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"] + [
+    h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()
+]
+# Django 4+는 HTTPS로 들어오는 POST(로그인 등)를 CSRF 검증할 때 이 목록에 있는 origin만 신뢰한다.
+# 배포한 도메인을 https://까지 포함해서 넣어야 한다. 예: https://2535cjzok.up.railway.app
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+
+# 배포 환경(DEBUG=False)에서는 쿠키가 HTTPS로만 오가게 강제한다 (로컬 http 개발 환경은 예외).
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Application definition
@@ -60,6 +71,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # 정적파일(CSS 등)을 nginx 없이 Django만으로 서빙
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -129,11 +141,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+# 로컬 개발은 그냥 SQLite. 배포 플랫폼(Railway 등)이 Postgres를 붙여주면 DATABASE_URL
+# 환경변수가 자동으로 채워지는데, 그게 있으면 그걸 쓰고 없으면 SQLite로 그대로 돌아간다.
+import dj_database_url
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 
@@ -172,8 +188,23 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # `collectstatic`이 여기로 파일들을 모아준다 (배포용)
+STORAGES = {
+    # "staticfiles"만 새로 지정하고 "default"(사진 업로드 등에 쓰는 일반 파일 저장소)를
+    # 빠뜨리면, Django는 STORAGES를 건드린 순간 둘 다 명시적으로 적어야 하는 걸로 취급해서
+    # 자동으로 채워주지 않는다 - 그래서 얼굴/전신사진 등 ImageField.url을 쓰는 곳마다 에러가 났다.
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
-# 얼굴/전신사진 등 사용자 업로드 파일 저장 위치 (개발 단계엔 로컬 디스크에 저장)
+# 얼굴/전신사진 등 사용자 업로드 파일 저장 위치.
+# 주의: 대부분의 배포 플랫폼(Railway 등)은 디스크가 "임시"라, 재배포하면 여기 저장된
+# 파일이 통째로 사라질 수 있다. 1차 테스트 배포는 이대로 가도 되지만, 실제 서비스로 굳히려면
+# Cloudflare R2 같은 외부 스토리지로 옮겨야 한다 (예전에 얘기했던 그 이유 그대로).
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
