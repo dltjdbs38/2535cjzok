@@ -3,6 +3,7 @@ import logging
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.core.files.base import ContentFile
+from django.conf import settings
 logger = logging.getLogger(__name__)   # 파일 맨 위 import들 옆에 추가
 
 def download_kakao_photo(user, image_url):
