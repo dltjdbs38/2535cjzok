@@ -10,3 +10,8 @@ services:
     # 실제로 인터넷에 노출되는 건 nginx뿐이고, nginx가 이 포트로 요청을 넘겨준다.
     ports:
       - "127.0.0.1:8000:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"   # 로그 파일 하나가 10MB가 되면 새 파일로 넘어감
+        max-file: "5"     # 최대 5개까지만 보관 -> 전체 50MB 넘으면 오래된 것부터 삭제

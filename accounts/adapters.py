@@ -1,8 +1,9 @@
 import requests
+import logging
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.core.files.base import ContentFile
-
+logger = logging.getLogger(__name__)   # 파일 맨 위 import들 옆에 추가
 
 def download_kakao_photo(user, image_url):
     """
@@ -95,3 +96,13 @@ class KakaoSocialAccountAdapter(DefaultSocialAccountAdapter):
         user = super().save_user(request, sociallogin, form)
         download_kakao_photo(user, user.profile_image_url)
         return user
+
+    def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
+        # allauth는 로그인 실패 원인을 화면에도 로그에도 안 남긴다. 직접 남겨서 원인을 볼 수 있게 한다.
+        logger.error(
+            "소셜 로그인 실패 provider=%s error=%s exception=%r",
+            provider.id, error, exception, exc_info=exception,
+        )
+        super().on_authentication_error(
+            request, provider, error=error, exception=exception, extra_context=extra_context
+        )

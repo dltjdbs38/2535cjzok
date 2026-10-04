@@ -224,3 +224,18 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# 로그는 파일이 아니라 화면(stderr)으로 내보낸다. 저장과 용량 관리는 Docker가 맡는다.
+# 평소엔 WARNING 이상(문제가 생겼을 때)만 남겨서 로그가 넘치지 않게 한다.
+# Django 기본 설정은 DEBUG=False일 때 500 에러를 화면으로 안 내보내서, 이 설정이 없으면 서버 에러가 안 보인다.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "{asctime} {levelname} {name} | {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+}
