@@ -46,6 +46,13 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED_O
 # 배포 환경(DEBUG=False)에서는 쿠키가 HTTPS로만 오가게 강제한다 (로컬 http 개발 환경은 예외).
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+# nginx가 "원래 요청은 https였다"고 알려주는 헤더(X-Forwarded-Proto)를 Django가 믿게 한다.
+# 이게 없으면 Django는 nginx와 gunicorn 사이의 http 연결만 보고 http라고 착각해서
+# 카카오 콜백 주소를 http://로 만든다 (KOE006의 원인).
+# 배포 환경(DEBUG=False)에서만 켠다: 로컬 runserver는 앞에 프록시가 없어서 헤더를 믿으면 안 되기 때문.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
 
 
 # Application definition
