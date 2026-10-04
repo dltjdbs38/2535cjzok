@@ -73,3 +73,114 @@ http://localhost:8000/dev/login-as/  에서 선택
 
 여기까지 되면 1단계는 끝. 다음은 프로필 등록 화면(얼굴/전신사진 업로드, 키/몸무게/취미/지역/종교/흡연 입력) +
 매칭 조건 설정 + 매칭 리스트로 넘어가면 됨.
+
+
+## 배포 (오라클 프리티어)
+
+오라클로 가면 직접 챙겨야 할 게 많아지는데 하나씩 정리해서 갈게. 먼저 Docker 기반으로 갈 거니까 필요한 설정 파일부터 만들고, 그다음 전체 순서를 안내할게.YAML 문법도 정상 확인했어. 이제 전체 순서를 단계별로 정리할게.`docker-compose.yml`은 프로젝트 루트에, `nginx-2535cjzok.conf`는 그냥 참고용 파일이라 로컬 아무 데나 두면 돼(서버에 올릴 때 내용만 복사해서 쓸 거야).
+
+---
+
+## 전체 그림
+
+```
+[핸드폰/PC 브라우저] → [nginx (80/443)] → [gunicorn (127.0.0.1:8000, Docker 컨테이너)] → [SQLite]
+                              ↑
+                        Let's Encrypt SSL
+```
+
+nginx는 서버에 직접 설치(컨테이너 아님), Django 앱은 Docker 컨테이너로 돌리는 구조야. 이렇게 나누는 이유는: SSL 인증서 자동 갱신(certbot)이 nginx가 호스트에 직접 있을 때 제일 간단하고 안정적이라서야.
+
+## Phase 1 — 오라클 클라우드 인스턴스 만들기
+
+1. [oracle.com/cloud/free](https://oracle.com/cloud/free)에서 Always Free 계정 가입 (카드 등록은 필요하지만 실제 결제는 안 됨 — Free 티어 안에서만 쓰면)
+2. 콘솔 → Compute → Instances → "Create Instance"
+3. Image: **Ubuntu** (최신 LTS) / Shape: **Ampere (ARM) A1.Flex** — Always Free 안에서 제일 넉넉한 사양(최대 4 OCPU, 24GB RAM 무료)
+4. SSH 키 페어 생성 → **개인키(.key 파일) 다운로드 꼭 받아두기** (이게 없으면 서버에 못 들어감)
+5. 생성 완료되면 콘솔에 **공인 IP 주소**가 뜸 — 이거 메모
+
+**참고**: ARM 인스턴스가 가끔 "용량 부족(Out of capacity)"으로 생성이 바로 안 될 때가 있어. 그럴 땐 몇 분~몇 시간 뒤에 다시 시도하면 되는 경우가 많아 — 오라클 프리티어 인기가 많아서 생기는 흔한 현상이야.
+
+## Phase 2 — 방화벽 두 군데 다 열기 (오라클은 이게 자주 놓치는 함정이야)
+
+오라클은 **클라우드 레벨 방화벽**이랑 **서버 안 OS 방화벽**이 따로 있어서, 둘 다 열어야 접속이 돼.
+
+**① 클라우드 콘솔에서**: 인스턴스 상세 → 서브넷 클릭 → Security List → "Add Ingress Rules"에서 **80번, 443번 포트**를 `0.0.0.0/0`으로 추가.
+
+**② 서버 접속해서 OS 방화벽도**:
+```bash
+ssh -i 다운받은키.key ubuntu@공인IP주소
+
+sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
+(오라클 우분투 이미지는 기본적으로 22번 포트 말고 다 막혀있어서, 이 단계를 빼먹으면 ①만 해도 계속 접속이 안 돼.)
+
+## Phase 3 — 서버에 Docker 설치 + 프로젝트 올리기
+
+```bash
+# Docker 설치
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+# 여기서 한 번 로그아웃 후 재접속해야 docker 명령어에 sudo 안 붙여도 됨
+
+# 프로젝트 가져오기 (GitHub에 올려놨다면)
+git clone https://github.com/너의계정/2535cjzok.git
+cd 2535cjzok
+
+# .env 파일은 git에 안 올라가 있으니 서버에서 직접 새로 만들기
+nano .env
+# (KAKAO_CLIENT_ID, KAKAO_CLIENT_SECRET, DJANGO_SECRET_KEY, DJANGO_DEBUG=False,
+#  DJANGO_ALLOWED_HOSTS=도메인, DJANGO_CSRF_TRUSTED_ORIGINS=https://도메인 채워넣기)
+
+# SQLite 파일을 미리 만들어둬야 함 (안 그러면 Docker가 파일 대신 폴더를 만들어버림)
+touch db.sqlite3
+mkdir -p media
+
+docker compose up -d --build
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser
+```
+
+## Phase 4 — 도메인 연결
+
+1. 도메인 구입 (가비아/Namecheap 등, 연 1~2만원)
+2. 그 도메인 관리 화면에서 **A 레코드**를 오라클 인스턴스의 **공인 IP**로 연결
+3. 반영되는 데 몇 분~몇 시간 걸릴 수 있음 (`nslookup 도메인` 으로 확인 가능)
+
+## Phase 5 — nginx + 무료 SSL(Let's Encrypt)
+
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+
+# 아까 만든 nginx-2535cjzok.conf 내용을 서버에 붙여넣기 (server_name만 실제 도메인으로 바꿔서)
+sudo nano /etc/nginx/sites-available/2535cjzok
+sudo ln -s /etc/nginx/sites-available/2535cjzok /etc/nginx/sites-enabled/
+sudo nginx -t   # 문법 체크
+sudo systemctl restart nginx
+
+# SSL 인증서 발급 - 이 한 줄이 nginx 설정에 https 블록까지 자동으로 추가해줌
+sudo certbot --nginx -d 너의도메인.com
+```
+
+certbot이 인증서 자동 갱신도 알아서 등록해줘서, 갱신은 신경 안 써도 돼.
+
+## Phase 6 — 카카오 개발자센터 갱신
+
+[카카오 로그인] > [플랫폼]에 `https://너의도메인.com` 추가, Redirect URI에 `https://너의도메인.com/accounts/kakao/login/callback/` 추가 (localhost용은 그대로 둬도 됨).
+
+## Phase 7 — 핸드폰으로 테스트
+
+`https://너의도메인.com` 을 핸드폰 크롬에 쳐서 카카오 로그인부터 끝까지 해보면 끝.
+
+---
+
+## 나중에 코드 수정하고 다시 올릴 때
+
+```bash
+git pull
+docker compose up -d --build
+docker compose exec web python manage.py migrate   # 모델 바뀐 게 있으면
+```
