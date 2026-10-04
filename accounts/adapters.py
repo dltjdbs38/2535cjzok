@@ -98,10 +98,18 @@ class KakaoSocialAccountAdapter(DefaultSocialAccountAdapter):
         return user
 
     def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
-        # allauth는 로그인 실패 원인을 화면에도 로그에도 안 남긴다. 직접 남겨서 원인을 볼 수 있게 한다.
         logger.error(
-            "소셜 로그인 실패 provider=%s error=%s exception=%r",
-            provider.id, error, exception, exc_info=exception,
+            "소셜 로그인 실패 provider=%s error=%s exception=%r | "
+            "카카오가붙인error=%s 설명=%s code있음=%s state있음=%s | "
+            "세션쿠키도착=%s 세션에저장된state=%s | https=%s host=%s ua=%s",
+            provider.id, error, exception,
+            request.GET.get("error"), request.GET.get("error_description"),
+            "code" in request.GET, "state" in request.GET,
+            bool(request.COOKIES.get(settings.SESSION_COOKIE_NAME)),
+            bool(request.session.get("socialaccount_states")),
+            request.is_secure(), request.get_host(),
+            request.META.get("HTTP_USER_AGENT", "")[:80],
+            exc_info=exception,
         )
         super().on_authentication_error(
             request, provider, error=error, exception=exception, extra_context=extra_context
