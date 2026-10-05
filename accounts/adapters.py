@@ -30,6 +30,8 @@ class AccountAdapter(DefaultAccountAdapter):
     카카오와 무관한 일반 가입 화면을 기본으로 열어주는데, 우리 서비스는
     "카카오톡으로만 로그인 가능"이 원칙이라 이 경로 자체를 막아야 한다.
     (카카오 로그인/가입은 SocialAccountAdapter가 따로 처리하므로 영향 없음)
+    # 주의: 소셜 로그인의 신규 가입 허용 여부도 기본적으로 이 값을 따라가므로,
+        # 카카오 신규 가입은 KakaoSocialAccountAdapter.is_open_for_signup에서 따로 열어준다.
     """
 
     def is_open_for_signup(self, request):
@@ -42,6 +44,11 @@ class KakaoSocialAccountAdapter(DefaultSocialAccountAdapter):
     카카오가 내려준 원본 응답(extra_data)에서 닉네임/프로필사진/출생연도/성별을 꺼내
     우리 User 모델 필드에 채워 넣는 역할.
     """
+    def is_open_for_signup(self, request, sociallogin):
+        # 기본 동작은 일반 계정 어댑터(AccountAdapter)의 결과를 그대로 따라간다. 우리는 그쪽을
+        # 이메일/비밀번호 가입을 막으려고 False로 뒀는데, 그러면 카카오 신규 가입까지 같이 막혀서
+        # "Sign Up Closed"가 뜬다. 카카오로 들어온 신규 가입만 열어준다.
+        return sociallogin.account.provider == "kakao"
 
     def populate_user(self, request, sociallogin, data):
         user = super().populate_user(request, sociallogin, data)
