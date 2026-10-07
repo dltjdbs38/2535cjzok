@@ -138,6 +138,8 @@ nano .env
 touch db.sqlite3
 mkdir -p media
 
+sudo usermod -aG docker ubuntu     # ubuntu를 docker 그룹에 추가
+newgrp docker                      # 지금 터미널에 바로 적용 (또는 로그아웃 후 재접속)
 docker compose up -d --build
 docker compose exec web python manage.py migrate
 docker compose exec web python manage.py createsuperuser
@@ -160,6 +162,7 @@ sudo nano /etc/nginx/sites-available/2535cjzok
 sudo ln -s /etc/nginx/sites-available/2535cjzok /etc/nginx/sites-enabled/
 sudo nginx -t   # 문법 체크
 sudo systemctl restart nginx
+chmod o+x /home/ubuntu # 사진 읽어오기
 
 # SSL 인증서 발급 - 이 한 줄이 nginx 설정에 https 블록까지 자동으로 추가해줌
 sudo certbot --nginx -d 너의도메인.com
