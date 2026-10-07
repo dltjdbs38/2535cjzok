@@ -47,6 +47,8 @@ urlpatterns = [
 
 if settings.DEBUG:
     # 개발 중에만 업로드된 이미지(얼굴/전신사진)를 서버가 직접 서빙해준다.
+    # 카카오 로그인은 브라우저가 카카오 화면으로 이동하고, 사람이 계정을 인증하는 과정, JMeter는 이걸 통과할 수 없어. 
+    # 그리고 가짜 회원 270명을 동시에 카카오로 로그인시킬 수도 없고. 그래서 "가짜 계정에 한해 세션만 발급해주는 좁은 입구"를 따로 둔 거야.
     # 실제 배포 시엔 R2/S3 같은 외부 스토리지가 이 역할을 대신하게 됨.
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
