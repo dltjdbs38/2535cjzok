@@ -1,0 +1,49 @@
+# 부하테스트용 staging 스택. prod(docker-compose.yml)와 완전히 분리된 컨테이너/DB/미디어로 돈다.
+#
+# 실행:   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build
+# 마이그레이션: docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm web python manage.py migrate
+# 종료:   docker compose -f docker-compose.staging.yml --env-file .env.staging down   (테스트 끝나면 꼭 내려서 로그인 통로를 닫는다)
+#
+# worker/thread 수는 .env.staging의 GUNICORN_WORKERS / GUNICORN_THREADS로 바꿔가며 비교실험한다.
+name: 2535cjzok-staging
+
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env.staging
+    volumes:
+      # SQLite 파일 하나가 아니라 디렉터리째 마운트한다 (WAL 모드 실험 시 -wal/-shm 파일도 같이 보존돼야 함).
+      - ./staging-data:/app/staging-data
+      - ./staging-data/media:/app/media
+    ports:
+      - "127.0.0.1:8001:8000"   # prod는 8000. 외부에는 nginx만 노출.
+    # --- 과부하 보호 (테스트 환경의 일부이므로 모든 테스트에서 같은 값으로 고정하고 보고서에 기록할 것) ---
+    mem_limit: 5g       # 메모리가 터져도 VM 전체가 아니라 이 컨테이너만 종료되게
+    cpus: "1.6"         # 2 vCPU 중 0.4는 OS/nginx/SSH 몫으로 남김. 앱이 쓸 수 있는 CPU를 줄이므로 임계점은 보수적으로 나옴
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"   # 도커 로그가 디스크를 채우는 것 방지
+        max-file: "3"
+    command:
+      - gunicorn
+      - config.wsgi:application
+      - --bind=0.0.0.0:8000
+      - --workers=${GUNICORN_WORKERS:-2}
+      - --threads=${GUNICORN_THREADS:-1}
+      - --access-logfile=-
+      - --access-logformat=%(h)s "%(r)s" %(s)s %(b)sB rt=%(D)sus
+
+  # --- Postgres 비교실험용 (5단계). 평소엔 꺼져 있고 `--profile pg`를 붙여야만 뜬다. ---
+  # 사용하려면: requirements.txt에 psycopg[binary] 추가 후 재빌드, .env.staging의 DATABASE_URL을 postgres로 교체.
+  db:
+    image: postgres:16
+    profiles: ["pg"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: loadtest
+      POSTGRES_PASSWORD: loadtest
+      POSTGRES_DB: loadtest
+    volumes:
+      - ./staging-data/pg:/var/lib/postgresql/data
