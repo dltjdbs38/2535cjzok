@@ -239,3 +239,6 @@ LOGGING = {
     },
     "root": {"handlers": ["console"], "level": "WARNING"},
 }
+# ===== 부하테스트 전용 로그인 통로 (staging의 .env.staging에서만 켠다. prod .env에는 넣지 말 것) =====
+LOADTEST_ENABLED = os.environ.get("LOADTEST_ENABLED", "False") == "True"
+LOADTEST_TOKEN = os.environ.get("LOADTEST_TOKEN", "")

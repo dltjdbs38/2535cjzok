@@ -49,3 +49,9 @@ if settings.DEBUG:
     # 개발 중에만 업로드된 이미지(얼굴/전신사진)를 서버가 직접 서빙해준다.
     # 실제 배포 시엔 R2/S3 같은 외부 스토리지가 이 역할을 대신하게 됨.
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# ===== 부하테스트 전용 로그인 통로: LOADTEST_ENABLED=True일 때만 라우트가 등록된다 (꺼져 있으면 이 주소는 404) =====
+if settings.LOADTEST_ENABLED:
+    from accounts.loadtest import loadtest_login
+
+    urlpatterns += [path("loadtest/login/<int:user_id>/", loadtest_login, name="loadtest_login")]
