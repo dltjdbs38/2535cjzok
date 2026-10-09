@@ -17,3 +17,10 @@ Thumbs.db
 # 테스트/커버리지 산출물 (지금은 안 쓰지만 나중에 테스트 도입하면 필요)
 .coverage
 htmlcov/
+.env.staging
+
+staging-data/
+
+loadtest/users*.csv
+
+loadtest/results/

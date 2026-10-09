@@ -10,3 +10,10 @@ staticfiles/
 *.sqlite3
 .vscode/
 .idea/
+.env.staging
+
+staging-data/
+
+loadtest/users*.csv
+
+loadtest/results/

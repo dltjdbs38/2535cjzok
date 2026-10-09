@@ -74,8 +74,20 @@ sudo sed -i 's/worker_connections 768;/worker_connections 4096;/' /etc/nginx/ngi
 grep -q worker_rlimit_nofile /etc/nginx/nginx.conf || sudo sed -i '1i worker_rlimit_nofile 8192;' /etc/nginx/nginx.conf
 sudo nginx -t && sudo systemctl reload nginx
 
+#  (서윤 1,2) 다시 취소하기
+sudo sed -i 's/worker_connections 4096;/worker_connections 768;/' /etc/nginx/nginx.conf
+sudo sed -i '/^worker_rlimit_nofile 8192;$/d' /etc/nginx/nginx.conf
+sudo nginx -t && sudo systemctl reload nginx
+
+sudo sed -i '\|^/swapfile none swap sw 0 0$|d' /etc/fstab
+sudo swapoff /swapfile
+sudo rm /swapfile
+
 # (3) 코드 받기 + staging 폴더/환경변수
-cd ~/2535cjzok && git pull
+cd ~/2535cjzok
+git status                  # 서버에서 직접 고친 파일이 없는지
+git fetch origin
+git switch test1
 mkdir -p staging-data/media
 cp -n env.staging.example .env.staging
 sed -i 's/your-domain.com/2535cjzok.com/g' .env.staging
