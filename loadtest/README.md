@@ -22,6 +22,39 @@ python loadtest/flow_check.py --base-url https://staging.2535cjzok.com --csv loa
 
 단계별 p50/p95를 표로 저장해둔다. 이후 모든 부하 결과는 이 표와 비교한다. 이 값에는 PC↔서버 네트워크 왕복 시간(RTT)이 포함돼 있다는 점을 기록해둔다(`ping`으로 따로 측정).
 
+```bash
+# flow_check 30라운드(PC)
+PYTHONUTF8=1 python loadtest/flow_check.py --base-url https://staging.2535cjzok.com --csv loadtest/users.csv --rounds 30 | tee baseline_rounds30.txt
+
+# PC <-> 서버 왕복시간
+for i in $(seq 1 20); do curl -s -o /dev/null -w "%{time_connect}\n" https://staging.2535cjzok.com/; done | awk '{s+=$1; if(min==""||$1<min)min=$1; if($1>max)max=$1} END{printf "RTT 평균 %.1f ms / 최소 %.1f / 최대 %.1f\n", s/NR*1000, min*1000, max*1000}'
+```
+
+유휴자원 측정(서버)
+```bash
+# 주석처리 된 부분이 명령어, 결과는 첨부함.
+# docker stats --no-stream
+CONTAINER ID   NAME                      CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O         PIDS
+9b209d48ec16   2535cjzok-staging-web-1   0.01%     111.5MiB / 5GiB       2.18%     792kB / 7.87MB    0B / 6.07MB       3
+e415a9163b6f   2535cjzok-web-1           0.01%     135.9MiB / 7.749GiB   1.71%     88.1MB / 13.7MB   45.1MB / 5.53MB   3
+# vmstat 1 5
+procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu
+ 2  0      0 4379708 140820 2924880    0    0     4    50  114    0  0  0 100  0  0  0
+ 1  0      0 4379708 140820 2924932    0    0     0     0  212  186  0  0 100  0  0  0
+ 0  0      0 4379708 140820 2924932    0    0     0     0  214  213  0  0 99  0  0  0
+ 0  0      0 4379708 140820 2924932    0    0     0     0   79  117  0  0 100  0  0  0
+ 0  0      0 4379708 140824 2924936    0    0     0   100  213  198  1  1 99  0  0  0
+# free -h
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       976Mi       4.2Gi       6.1Mi       2.9Gi       6.8Gi
+Swap:          2.0Gi          0B       2.0Gi
+# df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        45G  6.8G   38G  16% /
+
+```
+
 ## 4. JMeter 구성 명세 (Thread Group 2개: 탐색형 / 채팅형)
 
 사용자 유형을 **Thread Group 두 개로 나눠서** 목표 표의 비율(탐색형 60% = 162명, 채팅형 40% = 108명)을 그대로 재현한다. 한 흐름에 모든 행동을 섞으면 단위업무별 TPS를 목표에 맞추기 어렵다. JMeter 5.x 이상 기준이다.
@@ -88,6 +121,7 @@ Loop 안에는 **Counter 설정 요소**(Per User 독립 카운트, Reference Na
 
 | 종류 | 목적 | 부하 | 판정 |
 |---|---|---|---|
+| 스모크 | 한 명이 한번 전체 흐름 따라가기(로그인 -> 매칭리스트 -> 프로필 -> 대화 -> 메시지 -> 폴링) | 1스레드 x 1번 | JMeter 스크립트가 흐름을 제대로 따라하는지(성공: 1라운드 완료) |
 | 통합 | 흐름 전체가 오류 없이 도는지 | 1 스레드 × 5 루프 | 에러 0 |
 | 부하(Load) | 예상 피크에서 목표 만족? | 270명(탐색 162 + 채팅 108), 램프업 5분 후 15분 유지 | 목표 표 전 항목 |
 | 임계치(Threshold) | 무너지는 지점(knee) 찾기 | 135 → 270 → 405 → 540 (→ 810), 단계당 5분 (Stepping/Ultimate Thread Group 플러그인) | 응답시간·오류율 목표를 처음 넘는 단계 |

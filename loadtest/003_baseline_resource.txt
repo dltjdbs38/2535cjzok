@@ -1,0 +1,38 @@
+[서버PC 유휴자원]
+# docker stats --no-stream
+CONTAINER ID   NAME                      CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O         PIDS
+9bXXXXXXXXXX   2535cjzok-staging-web-1   0.01%     111.5MiB / 5GiB       2.18%     792kB / 7.87MB    0B / 6.07MB       3
+e4XXXXXXXXXX   2535cjzok-web-1           0.01%     135.9MiB / 7.749GiB   1.71%     88.1MB / 13.7MB   45.1MB / 5.53MB   3
+
+# vmstat 1 5
+procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu
+ 2  0      0 4379708 140820 2924880    0    0     4    50  114    0  0  0 100  0  0  0
+ 1  0      0 4379708 140820 2924932    0    0     0     0  212  186  0  0 100  0  0  0
+ 0  0      0 4379708 140820 2924932    0    0     0     0  214  213  0  0 99  0  0  0
+ 0  0      0 4379708 140820 2924932    0    0     0     0   79  117  0  0 100  0  0  0
+ 0  0      0 4379708 140824 2924936    0    0     0   100  213  198  1  1 99  0  0  0
+
+# free -h
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       976Mi       4.2Gi       6.1Mi       2.9Gi       6.8Gi
+Swap:          2.0Gi          0B       2.0Gi
+
+# df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        45G  6.8G   38G  16% /
+
+[핑 테스트]
+# for i in $(seq 1 20); do curl -s -o /dev/null -w "%{time_connect}\n" https://staging.2535cjzok.com/; done | awk '{s+=$1; if(min==""||$1<min)min=$1; if($1>max)max=$1} END{printf "RTT 평균 %.1f ms / 최소 %.1f / 최대 %.1f\n", s/NR*1000, min*1000, max*1000}'
+RTT 평균 41.4 ms / 최소 37.2 / 최대 65.6
+
+# RTT란?
+Round Trip Time (왕복 지연 시간) / PC -> 서버로 응답을 보냈다가 다시 내 PC 로 응답을 돌려받는 데까지 걸린 총 시간.
+
+
+[기준표 정리]
+RTT	평균 41.4ms (37.2~65.6)
+베이스라인 p50/p95	002_baseline_round30.txt flow_check 표 그대로
+유휴 자원	CPU 99% idle, 메모리 used 976Mi / available 6.8Gi, 스왑 0, 디스크 16%
+서버 설정	workers=2, threads=1, cpus=1.6, mem_limit=5g, SQLite
+시드	3,000명, medium, 리스트 평균 22.5명, _candidates_for 12.6ms

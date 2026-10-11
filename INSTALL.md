@@ -121,11 +121,20 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm we
 출력의 `[점검]` 줄을 확인한다. **리스트가 빈 사람(0명)이 30%를 넘으면** `purge_loadtest_data --yes`로 지운 뒤 `--density high`로 다시 만든다.
 
 ```bash
+# 참고 : 다시 만들기 코드 (리스트가 빈 사람이 30% 넘을 시)
+docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm web python manage.py purge_loadtest_data --yes
+docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm web \
+  python manage.py seed_loadtest_data --pairs 1500 --density high --csv staging-data/users.csv
+```
+30% 가 잘 넘었다면 아래를 실행한다.
+```bash
 # PC에서: CSV 가져오기 (키 파일을 쓰면 scp -i 키파일 ...)
 scp ubuntu@서버주소:~/2535cjzok/staging-data/users.csv loadtest/users.csv
 
 # PC에서: 한 사용자가 전체 흐름을 끝까지 타는지 (토큰은 위 (3)에서 복사한 값)
 export LOADTEST_TOKEN=복사한_토큰
+# 토큰은 grep '^LOADTEST_TOKEN=' .env.staging 이걸로 확인
+# 아래 명령어 : 스모크 테스트(서버 말고 내 PC에서)
 python loadtest/flow_check.py --base-url https://staging.2535cjzok.com --csv loadtest/users.csv --rounds 1
 ```
 

@@ -1,0 +1,26 @@
+[실행 결과]
+aiais@DESKTOP-PO9L2E3 MINGW64 ~/OneDrive/바탕 화면/작업/2535cjzok-step1/2535cjzok (test1)
+$ python loadtest/flow_check.py --base-url https://staging.2535cjzok.com --csv loadtest/users.csv --rounds 1
+대상: https://staging.2535cjzok.com / user_id=1 partner_id=1501 / rounds=1
+
+step                      n      avg      p50      p95      max  (ms)
+00 login                  1    345.7    345.7    345.7    345.7
+01 home(redirect)         1    107.0    107.0    107.0    107.0
+02 matching list          1     56.0     56.0     56.0     56.0
+03 profile detail         1     46.2     46.2     46.2     46.2
+04 like(toggle)           1     90.6     90.6     90.6     90.6
+05 chat start             1    101.5    101.5    101.5    101.5
+06 chat poll(first)       1     44.1     44.1     44.1     44.1
+07 chat send              1     45.6     45.6     45.6     45.6
+08 chat poll              3     42.9     42.9     43.3     43.3
+09 chat list              1     46.5     46.5     46.5     46.5
+
+성공: 1라운드 완료 (총 요청 12건)
+
+
+
+[결과 분석]
+- n=1이라 p50/p95는 아직 의미가 없어. 한 번 잰 값이라 평균이 곧 그 값이야. 통계로 쓰려면 반복 측정이 필요해서, 이게 다음 단계(베이스라인)를 하는 이유야.
+- 폴링이 약 43ms로 거의 일정해. 이 앱의 폴링은 가벼워서, 이 시간의 대부분은 **PC와 서버 사이의 네트워크 왕복 시간(RTT)**일 가능성이 커. 그래서 ping으로 따로 재서 비교해보려는 거야.
+- 로그인이 345ms로 유독 길어. 첫 요청이라 TLS 연결을 새로 맺는 시간이 포함됐을 거야. 나머지는 연결을 재사용하니까 빨라 보여.
+- 매칭리스트 56ms는 시드의 _candidates_for 12.6ms와 합쳐 보면 서버 처리는 가볍고 나머지는 네트워크야. 이건 혼자 쓸 때 값이라 부하 때와 비교하는 기준점이 돼.
