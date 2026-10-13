@@ -69,13 +69,33 @@ head -1 loadtest/users.csv > loadtest/users_browse.csv && sed -n '402,$p'  loadt
 실행은 항상 CLI(GUI는 스크립트 디버깅 전용 - GUI로 부하를 걸면 JMeter 자체가 병목이 된다):
 
 ```bash
-JVM_ARGS="-Xms1g -Xmx2g" jmeter -n -t loadtest/2535cjzok.jmx \
-  -Jhost=staging.2535cjzok.com -Jtoken=$LOADTEST_TOKEN \
-  -Jcsv_browse=$PWD/loadtest/users_browse.csv -Jcsv_chat=$PWD/loadtest/users_chat.csv \
-  -Jbrowse_threads=162 -Jchat_threads=108 -Jramp=300 -Jduration=1200 \
-  -l loadtest/results/load-270.jtl -e -o loadtest/results/load-270-report
+# 26.10.11 첫 실행 / 설계도 기본값은 탐색/채팅 162명/108명
+mkdir -p loadtest/results # 1회만
+export LOADTEST_TOKEN=서버의_토큰 # cmd 열 때마다 해줘야함
+echo 'export PATH="$PATH:/c/Users/aiais/Downloads/apache-jmeter-5.6.3/bin"' >> ~/.bashrc # 1회만
+source ~/.bashrc # 1회만
+
+# 날짜/시간 다르게 기록하고 싶으면 아래 실행
+RUN=dry-run-$(date +%Y%m%d-%H%M)
+HERE=$(pwd -W)
+# 본 명령어
+JVM_ARGS="-Xms512m -Xmx1g" jmeter -n -t loadtest/2535cjzok.jmx \
+  -Jhost=staging.2535cjzok.com -Jtoken="$LOADTEST_TOKEN" \
+  -Jcsv_browse="$HERE/loadtest/users_browse.csv" -Jcsv_chat="$HERE/loadtest/users_chat.csv" \
+  -Jbrowse_threads=3 -Jchat_threads=2 -Jramp=10 -Jduration=90 \
+  -l loadtest/results/$RUN.jtl -e -o loadtest/results/$RUN-report
+
+# 예시 - 탐색/채팅 162명/108명
+JVM_ARGS="-Xms512m -Xmx1g" jmeter -n -t loadtest/2535cjzok.jmx \
+  -Jhost=staging.2535cjzok.com -Jtoken="$LOADTEST_TOKEN" \
+  -Jcsv_browse="$HERE/loadtest/users_browse.csv" -Jcsv_chat="$HERE/loadtest/users_chat.csv" \
+  -Jbrowse_threads=162 -Jchat_threads=108 -Jramp=3000 -Jduration=1200 \
+  -l loadtest/results/$RUN.jtl -e -o loadtest/results/$RUN-report
 ```
-(`-o` 폴더는 비어있거나 없어야 한다. 부하 생성기 CPU가 70%를 넘으면 그 결과는 신뢰하지 않는다.)
+(`-o` 폴더는 비어있거나 없어야 한다. -> 날짜 넣는 걸로 하면 상관없긴 하다. .jtl에는 결과가 저장돼 있으니 테스트를 다시 돌릴 필요 없이 리포트만 새로 만들면 돼. jmeter -g loadtest/results/$RUN.jtl -o loadtest/results/$RUN-report-2 단, 그 .jtl에 여러 번의 실행이 섞여 있지 않은 경우에만 의미가 있어.)
+
+
+(또한 부하 생성기 CPU가 70%를 넘으면 그 결과는 신뢰하지 않는다.)
 
 **플랜 레벨 설정**
 
